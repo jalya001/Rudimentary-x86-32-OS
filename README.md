@@ -320,13 +320,24 @@ Critical Sections, interrupt disabling
 Synchronization Primitives
 
 Mutex
+lock_init(lock_t)
+lock_acquire(lock_t)
+lock_release(lock_t)
 
 Semaphores
+semaphore_init(semaphore_t)
+semaphore_up(semaphore_t)
+semaphore_down(semaphore_t)
 
 Condition Variables
+condition_init(condition_t)
+condition_wait(lock_t, condition_t)
+condition_signal(condition_t)
+condition_broadcast(condition_t)
 
 Barriers
-
+barrier_init(barrier_t)
+barrier_wait(barrier_t)
 
 # 8 Interprocess Communication
 
@@ -355,6 +366,11 @@ This virtual memory mechanism requires us to have a virtual address space for ev
 
 ## .1 Address Translations
 
+## .x Address Space Allocation
+Provides the following system calls:
+mmap
+munmap
+
 
 ## 8.1 Paging
 
@@ -381,6 +397,8 @@ Functionalities of the bits in both entries:
 
 
 ## .3 Page Faults 
+exposes page_fault_handler for the interrupt
+
 
 ## .4 Allocating Pages
 
