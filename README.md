@@ -1,5 +1,5 @@
 # Rudimentary x86 OS
-An operating system built to serve as a showcase of simplified orthodox design. It has been tested on an Intel Pentium x86 processor emulated via Bochs 2.8.
+An operating system built to serve as a showcase of simplified orthodox design. It has been tested on an i586 processor emulated via Bochs 2.8.
 
 Note it is heavily Work-In-Progress. This includes both the code and the below text.
 
