@@ -742,10 +742,10 @@ Line Status Register:
 | ------------------------------------------- | ----------------------------------------- |
 | `serial_init()`                             | Initializes the serial hardware.          |
 | `serial_print(char c)`                      | Sends a character.                        |
-| `serial_print(const char *buf, size_t len)` | Sends a byte buffer.                      |
-| `serial_print(const char *str)`             | Sends a null-terminated string            |
-| `serial_print(int value)`                   | Sends an integer.                         |
-| `serial_read(char *c)` (TBD)                | Receive one character                     | 
+| `serial_print(char*, int)`                  | Sends a byte buffer.                      |
+| `serial_print(char*)`                       | Sends a null-terminated string            |
+| `serial_print(int)`                         | Sends an integer.                         |
+| `serial_read(char*)` (TBD)                  | Receive one character                     | 
 | `serial_available()` (TBD)                  | Check if there is input data.             |
 | `serial_flush()` (TBD)                      | Wait until pending output is transmitted. |
 
