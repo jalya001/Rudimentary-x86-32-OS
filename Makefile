@@ -12,16 +12,28 @@ CCOPTS = -std=gnu++17 -O2 -m32 -Wall -g -c -fno-builtin -fno-stack-protector \
 
 LDOPTS = -melf_i386 -nostdlib -N
 
+KERNEL_CXX := $(shell find $(KERNEL) -name '*.cpp')
+KERNEL_S := $(shell find $(KERNEL) -name '*.S')
+KERNEL_CXX_OBJ := $(patsubst %.cpp,$(BUILD)/%.o,$(KERNEL_CXX))
+KERNEL_S_OBJ := $(patsubst %.S,$(BUILD)/%.o,$(KERNEL_S))
+KERNEL_OBJS := $(KERNEL_CXX_OBJ) $(KERNEL_S_OBJ)
+
 all: $(BUILD) bootblock createimage kernel.elf image
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/kernel.o: $(KERNEL)/kernel.cpp | $(BUILD)
+$(BUILD)/%.o: %.cpp
+	mkdir -p $(dir $@)
 	$(CC) $(CCOPTS) -o $@ $<
 
-kernel.elf: $(BUILD)/kernel.o | $(BUILD)
-	$(LD) $(LDOPTS) -T $(KERNEL)/kernel.ld -o $(BUILD)/$@ $<
+$(BUILD)/%.o: %.S
+	mkdir -p $(dir $@)
+	$(CC) $(CCOPTS) -o $@ $<
+
+kernel.elf: $(KERNEL_OBJS)
+	$(LD) $(LDOPTS) -T $(KERNEL)/kernel.ld \
+		-o $(BUILD)/$@ $(KERNEL_OBJS)
 
 $(BUILD)/bootblock.o: ${BOOT}/bootblock.s | $(BUILD)
 	$(CC) $(CCOPTS) -o $@ $<
