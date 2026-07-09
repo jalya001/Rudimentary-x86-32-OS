@@ -72,16 +72,13 @@ kernel/
 ├── synchronization.c/h
 ├── memory.c/h
 ├── mailbox.c/h
-│
 ├── fs/
 │   ├── fs.c/h
 │   ├── block.c/h
 │   └── inode.c/h
-│
 ├── kdaemons/
 │   ├── loader.c/h
 │   └── clock.c/h
-│
 └── drivers/
     ├── keyboard.c/h
     ├── disk.c/h
