@@ -242,16 +242,18 @@ a process owns descriptors and address space, threads are schedulable and have e
 no process parent/child relations
 
 System calls:
-- pid_t process_create(): Allocate a new PCB, address space, pid, and create a thread.
-- void process_exit(int status): Terminates current process.
-- int exec(const char *path, char *argv[], char *envp[]): Replaces process image with a program. Makes a stack for it too.
-- tid_t thread_create(void *entry, *arg): Allocate a new TCB, allocate stack, add dummy register data, add to scheduler queues.
-- void thread_exit(int status): Terminate the calling thread.
-- void thread_yield(): Give up CPU.
-- pid_t get_pid(): Returns pid of current process.
-- tid_t get_tid(): Returns tid of current thread. 
-- map_memory: For allocating address space.
-- unmap_memory:
+
+| Name | Description |
+| `pid_t process_create()` | Allocate a new PCB, address space, pid, and create a thread. |
+| `void process_exit(int)` | Terminates current process. Uses an int to take status. |
+| `int exec(char*, char*[], char*[])` | Replaces process image with a program. Makes a stack for it too. Takes a path to replace at, arguments, and an image. |
+| `tid_t thread_create(void*, char*)` | Allocate a new TCB, allocate stack, add dummy register data, add to scheduler queues. |
+| `void thread_exit(int)` | Terminate the calling thread. |
+| `void thread_yield()` | Give up CPU. |
+| `pid_t get_pid()` | Returns pid of current process. |
+| `tid_t get_tid()` | Returns tid of current thread. | 
+| `map_memory` | For allocating address space. |
+| `unmap_memory` | |
 
 ## .x Programs
 All programs are listed on the Program Directory, which is located at a specific part of the disk (q.v. Disk Layout), and occupies only one sector in our case. On startup, the location is determined, and the directory read into memory. 
