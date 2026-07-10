@@ -307,6 +307,8 @@ we do not use TSS and privileges or anything orthodox for switching user and ker
 ## .x Ready Queue
 
 
+## .x Context switch
+Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
 # 6 System Calls
 
