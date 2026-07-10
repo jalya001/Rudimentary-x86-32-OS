@@ -244,6 +244,7 @@ no process parent/child relations
 System calls:
 
 | Name | Description |
+| --- | --- |
 | `pid_t process_create()` | Allocate a new PCB, address space, pid, and create a thread. |
 | `void process_exit(int)` | Terminates current process. Uses an int to take status. |
 | `int exec(char*, char*[], char*[])` | Replaces process image with a program. Makes a stack for it too. Takes a path to replace at, arguments, and an image. |
