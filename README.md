@@ -578,6 +578,10 @@ Called by irq1. Puts the typed character into the keyboard mailbox using mbox_se
 # 12 Screen Driver
 It's VGA driver
 
+VGA cell consists of
+byte 1 color
+byte 2 character
+
 Exposed interface (ring 0):
 
 | Name | Description |
