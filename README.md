@@ -576,6 +576,20 @@ putchar
 Called by irq1. Puts the typed character into the keyboard mailbox using mbox_send. Needs to be in critical section. 
 
 # 12 Screen Driver
+It's VGA driver
+
+Exposed interface (ring 0):
+
+| Name | Description |
+| --- | --- |
+| `void init_vga(void)` | Technically unnecessary, since text VGA hardware does not require initialization. |
+| `void vga_clear(void)` | Clears entire screen. |
+| `void vga_clear_region(int minx, int miny, int maxx, int maxy)` | Clears a rectangle on the screen. |
+| `void vga_set_cursor(int x, int y)` | Sets caret location. |
+| `void vga_get_cursor(int *x, int *y)` | Gets coordinates of caret. |
+| `void vga_put_char(char c)` | Writes a character at the caret. |
+| `void vga_write(const char *str)` | Writes multiple characters at the caret. |
+| `void vga_scroll(int lines)` | Irreversably scrolls screen.|
 
 # 13 Disk Driver
 One of the simplest sufficent designs for a disk driver is the ATA PIO driver.
