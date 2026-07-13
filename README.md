@@ -342,7 +342,7 @@ TSS differs significantly, and the differences are as follows:
 | 41    | Type[1] | 0     | ?                                            |
 | 42    | Type[2] | 0     | ?                                            |
 | 43    | Type[3] | 1     | ?                                            |
-| 44    | S       ) 0     | TSS entries are controlled by the processor. |
+| 44    | S       | 0     | TSS entries are controlled by the processor. |
 | 46-45 | DPL     | 00    | Only used by kernel.                         |
 | 54    | D/B     | 0     | Uses 16 bit.                                 |
 | 55    | G       | 0     | Uses small size.                             |
