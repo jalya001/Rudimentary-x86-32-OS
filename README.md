@@ -308,7 +308,13 @@ Only two levels of privileges are needed in our case which are ring 0 (kernel mo
 ## .x Setup
 To switch between them the following needs to be set up:
 
-GDT describing each privilege level.
+GDT describing each privilege level and TSS.
+Null entry
+Kernel code
+Kernel data
+User code
+User data
+TSS
 
 TSS for stack switching.
 
