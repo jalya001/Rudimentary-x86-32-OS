@@ -17,6 +17,7 @@ The OS has the following attributes and properties:
 | Multitasking                | - | Multiple threads and programs residing in memory at once. |
 | Demand-paged                | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
 | Simplified Unix File System | - | Including inodes. |
+| Simple Privilege Levels     | - | . |
 | System Call Interface       | - | We have system calls. |
 | Traditional Synchronization | - | We have all the synchronization primitives. |
 | Static Device Drivers       | - | All device drivers are hard-coded into the OS, and only keyboard, disk, serial, and screen are supported. |
