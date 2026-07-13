@@ -312,8 +312,46 @@ GDT describing each privilege level.
 
 TSS for stack switching.
 
+GDT Entries:
+
+| Bits  | Field        | Description                                | Value to set  | Reason |
+| ----- | ------------ | ------------------------------------------ | ------------- | ------ |
+| 0–15  | Limit[15:0]  | Lower 16 bits of segment limit             | 0xFFFF        | ... |
+| 16–31 | Base[15:0]   | Lower 16 bits of base address.             | 0             | ... |
+| 32–39 | Base[23:16]  | Middle 8 bits of base address.             | 0             | ... |
+| 40    | Type[0]      | Accessed.                                  | 0             | ... |
+| 41    | Type[1]      | Readable (code) / Writable (data).         | 1             | ? |
+| 42    | Type[2]      | Conforming (code) / Expand-down (data).    | 0             | ? |
+| 43    | Type[3]      | Executable (code) / Reserved (data).       | 0 (D) / 1 (C) | ? |
+| 44    | S            | Descriptor Type.                           | 1             | ... |
+| 46–45 | DPL          | Descriptor Privilege Level (0–3).          | 0 (K) / 3 (U) | 0 = Ring 0, 3 = Ring 3 |
+| 47    | P            | Present.                                   | 1             | ... |
+| 48–51 | Limit[19:16] | Upper 4 bits of segment limit.             | 0xF           | ... |
+| 52    | AVL          | Available for software use.                | 0             | ... |
+| 53    | L            | 64bit code segment.                        | 0             | ... |
+| 54    | D/B          | Default operand size.                      | 1             | ... |
+| 55    | G            | Granularity.                               | 1             | ... |
+| 56–63 | Base[31:24]  | Upper 8 bits of base address.              | 0             | ... |
+
+NB: "..." means the reason is the same as in the previous GDT used during boot.
+
+TSS differs significantly, and the differences are as follows:
+
+| Bits  | Name    | Value | Reason                                       |
+| ----- | ------- | ----- | -------------------------------------------- |
+| 41    | Type[1] | 0     | ?                                            |
+| 42    | Type[2] | 0     | ?                                            |
+| 43    | Type[3] | 1     | ?                                            |
+| 44    | S       ) 0     | TSS entries are controlled by the processor. |
+| 46-45 | DPL     | 00    | Only used by kernel.                         |
+| 54    | D/B     | 0     | Uses 16 bit.                                 |
+| 55    | G       | 0     | Uses small size.                             |
+
+Its base and limit are also based on something else.
+
+
 ## .x Entry
-Privilege changing requires interrupt and  iret
+Privilege changing requires interrupt and iret
 
 # 5 System Calls
 
