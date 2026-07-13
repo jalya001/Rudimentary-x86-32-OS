@@ -1,5 +1,5 @@
 # Rudimentary x86 OS
-An operating system built to serve as a showcase of simplified orthodox design. It has been tested on an i586 processor emulated via Bochs 2.8.
+A 32bit operating system built to serve as a showcase of simplified orthodox design. It has been tested on an i586 processor emulated via Bochs 2.8.
 
 Note it is heavily Work-In-Progress. This includes both the code and the below text.
 
@@ -299,8 +299,26 @@ list of the daemons we have?
 ## .x Initialization
 Make a dummy process, and then jump to the first real process.
 
+# 5 Protection
+It is useful to have a distinction between different privilege levels for protection purposes, although there is not much to protect in this case. Still, there are many important features built into the CPU that occur upon changing privilege levels, and so for a complete implementation of a simple orthodox OS, it is necessary.
 
-# 5 Scheduler
+Only two levels of privileges are needed in our case which are ring 0 (kernel mode) and ring 3 (user mode).
+
+## .x Setup
+To switch between them the following needs to be set up:
+
+GDT describing each privilege level.
+
+TSS for stack switching.
+
+## .x Entry
+Privilege changing requires interrupt and  iret
+
+# 5 System Calls
+
+
+
+# 6 Scheduler
 
 we do not use TSS and privileges or anything orthodox for switching user and kernel stacks? or do we?
 
@@ -309,9 +327,6 @@ we do not use TSS and privileges or anything orthodox for switching user and ker
 
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
-
-# 6 System Calls
-
 
 
 # 7 Synchronization
