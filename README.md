@@ -360,8 +360,15 @@ Its base and limit are also based on something else.
 Privilege changing requires interrupt and iret
 
 # 5 System Calls
+It is useful to have an interface for important kernel functions that can be accessed from any privilege level.
 
+The canonical approach to system calls uses interrupt 0x80, which takes register values as arguments. Register EAX is used as identifier.
 
+Once interrupt 0x80 is run, it switches to kernel mode and goes to the entry for system calls, selecting the right system call from the list containing all of them, executing it, and returning.
+
+To make using system calls more convenient, we have a syslib file which provides wrappers for all system calls
+
+(we want to metaprogram such that all system calls are written in one place, and automatically written in all other necessary places on compilation)
 
 # 6 Scheduler
 
