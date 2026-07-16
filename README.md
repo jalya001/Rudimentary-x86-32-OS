@@ -366,19 +366,21 @@ The canonical approach to system calls uses interrupt 0x80, which takes register
 
 Once interrupt 0x80 is run, it switches to kernel mode and goes to the entry for system calls, selecting the right system call from the list containing all of them, executing it, and returning.
 
-To make using system calls more convenient, we have a syslib file which provides wrappers for all system calls
+To make using system calls more convenient, we have a syslib file which provides wrappers for all system calls. It is also the only complete list of system calls we have.
 
 (we want to metaprogram such that all system calls are written in one place, and automatically written in all other necessary places on compilation)
 
 # 6 Scheduler
 
-we do not use TSS and privileges or anything orthodox for switching user and kernel stacks? or do we?
+
 
 ## .x Ready Queue
 
 
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
+
+(cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
 
 
 # 7 Synchronization
