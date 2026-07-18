@@ -372,7 +372,7 @@ To make using system calls more convenient, we have a syslib file which provides
 
 # 6 Scheduler
 
-
+need to configure PIT and PIC during initialization? unless it's not legacy?
 
 ## .x Ready Queue
 
@@ -380,7 +380,7 @@ To make using system calls more convenient, we have a syslib file which provides
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
-(cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
+(pit) generate irq0 -> (pic) send irq0 to cpu -> (cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
 
 
 # 7 Synchronization
