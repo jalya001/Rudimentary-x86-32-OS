@@ -362,13 +362,15 @@ Privilege changing requires interrupt and iret
 # Interrupts & Exceptions
 PIC -> CPU interrupt number -> IDT lookup
 
+In choosing between interrupt and trap gate, we use interrupt gates for all entries because it is simpler.
+
 When interrupts happen they reference the IDT in the CPU, which needs to be set.
 
-IDT:
+IDT Entry:
 
 | Bits | Field             | Description                      |
 | ---- | ----------------- | -------------------------------- |
-| 0-15 | Offset handler  | Lower bytes of the address.  |
+| 0-15 | Handler  | Lower bytes of the address.  |
 | 16-31  | Selector          | Code segment selector.           |
 | 32-39    | Reserved          | Needs to be 0.                   |
 | 40    | Type             | ...                              |
@@ -377,8 +379,14 @@ IDT:
 | 43    | Type             | ...                              |
 | 44    | Storage             | ...                              |
 | 45-46    | DPL             | ...                              |
-| 47    | Present             | ...                              |
-| 48-63  | Offset handler | Higher bytes of the address. |
+| 47    | Present             | That the interrupt is usable.  |
+| 48-63  | Handler | Higher bytes of the address. |
+
+Type bits are the same across entries since they are all interrupt gates.
+
+Entries differ by DPL since not all interrupts are on each privilege level. And differ by handler address.
+
+There may be a total of 256 entries, one for each interrupt number. An entry is not needed for every interrupt.
 
 ## .x Critical Sections
 Critical sections are when interrupts do not happen.
