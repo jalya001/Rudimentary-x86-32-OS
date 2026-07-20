@@ -368,19 +368,16 @@ When interrupts happen they reference the IDT in the CPU, which needs to be set.
 
 IDT Entry:
 
-| Bits | Field             | Description                      |
-| ---- | ----------------- | -------------------------------- |
-| 0-15 | Handler  | Lower bytes of the address.  |
-| 16-31  | Selector          | Code segment selector.           |
-| 32-39    | Reserved          | Needs to be 0.                   |
-| 40    | Type             | ...                              |
-| 41    | Type             | ...                              |
-| 42    | Type             | ...                              |
-| 43    | Type             | ...                              |
-| 44    | Storage             | ...                              |
-| 45-46    | DPL             | ...                              |
-| 47    | Present             | That the interrupt is usable.  |
-| 48-63  | Handler | Higher bytes of the address. |
+| Bits | Field             | Description                      | Value to set |
+| ---- | ----------------- | -------------------------------- | ------------ |
+| 0-15 | Offset | Lower bytes of the address.  | Address to handler off the selector. |
+| 16-31  | Selector          | Code segment selector.           | Kernel code segment. |
+| 32-39    | Reserved          | Needs to be 0.                   | 0 |
+| 40-43    | Type             | 14 = interrupt gate, 15 = trap gate | 14 |
+| 44    | Storage             | 0 for gates                         | 0 |
+| 45-46    | DPL             | User or kernel.                      | 0 or 3, depends. |
+| 47    | Present             | That the interrupt is usable.  | 1 |
+| 48-63  | Offset | Higher bytes of the address. | Address continued. |
 
 Type bits are the same across entries since they are all interrupt gates.
 
