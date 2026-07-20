@@ -374,8 +374,9 @@ To make using system calls more convenient, we have a syslib file which provides
 
 need to configure PIT and PIC during initialization? unless it's not legacy?
 
-## .x Ready Queue
+The ready queue is a circular linked list of TCBs. Implemented through having a next property on TCBs. The scheduler does not store any data on the ready queue itself.
 
+Adding a thread consists of slotting it into an empty space in the TCB table and updating the most adjacent TCBs. Removing a thread is similar.
 
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
