@@ -359,6 +359,34 @@ Its base and limit are also based on something else.
 ## .x Entry
 Privilege changing requires interrupt and iret
 
+# Interrupts & Exceptions
+PIC -> CPU interrupt number -> IDT lookup
+
+When interrupts happen they reference the IDT in the CPU, which needs to be set.
+
+IDT:
+
+| Bits | Field             | Description                      |
+| ---- | ----------------- | -------------------------------- |
+| 0-15 | Offset handler  | Lower bytes of the address.  |
+| 16-31  | Selector          | Code segment selector.           |
+| 32-39    | Reserved          | Needs to be 0.                   |
+| 40    | Type             | ...                              |
+| 41    | Type             | ...                              |
+| 42    | Type             | ...                              |
+| 43    | Type             | ...                              |
+| 44    | Storage             | ...                              |
+| 45-46    | DPL             | ...                              |
+| 47    | Present             | ...                              |
+| 48-63  | Offset handler | Higher bytes of the address. |
+
+## .x Critical Sections
+Critical sections are when interrupts do not happen.
+enter_critical
+leave_critical
+leave_critical_delayed
+
+
 # 5 System Calls
 It is useful to have an interface for important kernel functions that can be accessed from any privilege level.
 
