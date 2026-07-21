@@ -49,7 +49,7 @@ correct bochs configuration?
 | [3 Startup](#3-startup) |
 | [4 Programs, Processes, & Threads](#4-programs-processes--threads) |
 | [5 Interrupts & Exceptions](#5-interrupts--exceptions) |
-| [6 Systen Calls](#6-system-calls) |
+| [6 System Calls](#6-system-calls) |
 | [7 Scheduler](#7-scheduler) |
 | [7 Synchronization](#7-synchronization) |
 | [10 Interprocess Communication](#8-interprocess-communication) |
