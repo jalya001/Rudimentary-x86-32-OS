@@ -48,16 +48,17 @@ correct bochs configuration?
 | --- |
 | [3 Startup](#3-startup) |
 | [4 Programs, Processes, & Threads](#4-programs-processes--threads) |
-| [5 Scheduler](#5-scheduler) |
-| [6 System Calls](#6-system-calls) |
+| [5 Interrupts & Exceptions](#5-interrupts--exceptions) |
+| [6 Systen Calls](#6-system-calls) |
+| [7 Scheduler](#7-scheduler) |
 | [7 Synchronization](#7-synchronization) |
-| [8 Interprocess Communication](#8-interprocess-communication) |
-| [9 Virtual Memory](#9-virtual-memory) |
-| [10 File System](#10-file-system) |
-| [11 Keyboard Driver](#11-keyboard-driver) |
-| [12 Screen Driver](#12-screen-driver) |
-| [13 Disk Driver](#13-disk-driver) |
-| [14 Serial Driver](#14-serial-driver) |
+| [10 Interprocess Communication](#8-interprocess-communication) |
+| [11 Virtual Memory](#9-virtual-memory) |
+| [12 File System](#10-file-system) |
+| [13 Keyboard Driver](#11-keyboard-driver) |
+| [14 Screen Driver](#12-screen-driver) |
+| [15 Disk Driver](#13-disk-driver) |
+| [16 Serial Driver](#14-serial-driver) |
 
 ## 2.1 Folder Structure
 ```text
@@ -359,7 +360,7 @@ Its base and limit are also based on something else.
 ## .x Entry
 Privilege changing requires interrupt and iret
 
-# Interrupts & Exceptions
+# 6 Interrupts & Exceptions
 PIC -> CPU interrupt number -> IDT lookup
 
 In choosing between interrupt and trap gate, we use interrupt gates for all entries because it is simpler.
@@ -406,7 +407,7 @@ leave_critical_delayed
 | 33 | Keyboard | 0 | IRQ1. |
 | 0x80 | System Call | 3 | |
 
-# 5 System Calls
+# 7 System Calls
 It is useful to have an interface for important kernel functions that can be accessed from any privilege level.
 
 The canonical approach to system calls uses interrupt 0x80, which takes register values as arguments. Register EAX is used as identifier.
@@ -417,7 +418,7 @@ To make using system calls more convenient, we have a syslib file which provides
 
 (we want to metaprogram such that all system calls are written in one place, and automatically written in all other necessary places on compilation)
 
-# 6 Scheduler
+# 8 Scheduler
 
 need to configure PIT and PIC during initialization? unless it's not legacy?
 
@@ -431,7 +432,7 @@ Changing privilege levels has the CPU change to kernel stack for you on x86. Pri
 (pit) generate irq0 -> (pic) send irq0 to cpu -> (cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
 
 
-# 7 Synchronization
+# 9 Synchronization
 the use of busy waits isn't great
 
 Critical Sections, interrupt disabling
@@ -458,7 +459,7 @@ Barriers
 barrier_init(barrier_t)
 barrier_wait(barrier_t)
 
-# 8 Interprocess Communication
+# 10 Interprocess Communication
 
 
 Interface:
@@ -477,7 +478,7 @@ mbox_stat
 
 
 
-# 9 Virtual Memory
+# 11 Virtual Memory
 rewrite to use block abstraction?
 
 This virtual memory mechanism requires us to have a virtual address space for every (user) process. Where during use, these virtual addresses get translated to physical addresses. 
@@ -491,7 +492,7 @@ mmap
 munmap
 
 
-## 8.1 Paging
+## .1 Paging
 
 ## .2 Two-level Paging 
 
@@ -532,7 +533,7 @@ yes
 ### .6.2 Page Entries Setup
 
 
-# 10 File System
+# 12 File System
 Arbitrary storage is an essential part of user operating systems, and the disk is utilized for that by writing data into it, in our case, into the Datablocks sectors. However, for that to be of any use, the data should not be written where there already is data, and it should be retrievable in a predictable manner. Or else, your data is constantly going to be overwritten, corrupted, and require scanning the entire storage space to find. In mind of that, a system is required, a file system.
 
 There are many types of file systems, but for ours, we have based it on the Unix File System (UFS), although in a greatly simplified form. It exposes the typical user interface of directories with arbitrarily many directories and files inside of them, all of which have names and other metadata. They take on the structure of a tree from the root directory.
@@ -680,7 +681,7 @@ All directories are initialized with the dirents ".." (parent directory) and "."
 When the number of links hits 0, it is necessary to free the inode, or else we are bound to run out of inodes. It is marked as free in the inode table with free_ibmap_entry.
 
 
-# 11 Keyboard Driver
+# 13 Keyboard Driver
 Uses mailbox
 
 keyboard_init 
@@ -692,7 +693,7 @@ System call. Reads a character from the mailbox using mbox_recv, to also clear i
 putchar 
 Called by irq1. Puts the typed character into the keyboard mailbox using mbox_send. Needs to be in critical section. 
 
-# 12 Screen Driver
+# 14 Screen Driver
 It's VGA driver
 
 VGA cell consists of
@@ -712,7 +713,7 @@ Exposed interface (ring 0):
 | `void vga_write(const char *str)` | Writes multiple characters at the caret. |
 | `void vga_scroll(int lines)` | Irreversably scrolls screen.|
 
-# 13 Disk Driver
+# 15 Disk Driver
 One of the simplest sufficent designs for a disk driver is the ATA PIO driver.
 
 The following functions are needed:
@@ -724,7 +725,7 @@ The following functions are needed:
 | `ata_write_sector(lba, buffer)` | Write one 512-byte sector.                    |
 | `ata_get_capacity()`            | Get number of sectors.                        |
 
-## 13.1 Advanced Technology Attachment
+## .1 Advanced Technology Attachment
 ATA is a standard that most disks used to follow. Importantly, it features a command interface on the disk's end that consists of registers the driver reads and writes to interact with the disk.
 
 ATA Registers:
@@ -788,22 +789,22 @@ Device Control Register Bits:
 | 2   | SRST | Software reset.                 |
 | 1   | nIEN | Disable interrupts.             |
 
-## 13.2 Programmed Input/Output
+## .2 Programmed Input/Output
 PIO is moving all disk data through the CPU into working memory, rather than directly into working memory (which would be DMA etc.). Note that DMA is far more efficient, and in OSes that implement both, PIO is used only as a fallback and before DMA has been initialized.
 
-## 13.3 Initialization
+## .3 Initialization
 On init, needs to check if it supports PIO.
 
-## 13.4 Reading
+## .4 Reading
 
-## 13.5 Writing
+## .5 Writing
 
-# 14 Serial Driver
+# 16 Serial Driver
 It is integral for debugging to output information, and the main method of which is usually through "serial out", which is sending the information through a UART-based serial port. The role of this driver is to provide an abstraction layer such that higher level components need not interact with serial registers directly. The usual gain of this is that it means calls outside of this driver are hardware independent. However, our driver in its simple form supports only x86 PC-compatible 16550 UART devices located at the legacy COM1 I/O port (0x3F8). There is neither any port scanning, yet it initializes on startup, so it assumes the device is already plugged in.
 
 Note many newer machines do not have the COM1 port nor any UART serial ports at all. In these cases, this driver should quietly fail.
 
-## 14.1 Initialization
+## .1 Initialization
 Consists of setting some registers.
 
 UART Registers:
@@ -859,7 +860,7 @@ Modem Status Register:
 | 3   | OUT2     | Auxiliary output / IRQ gate. | | |
 | 4   | Loopback | Internal test mode.          | | |
 
-## 14.2 I/O
+## .2 I/O
 We have no input as of now. And output is simply sending and waiting until the Transmit Holding Register to receive is empty. That is known by checking the bit in the LSR.
 
 Line Status Register:
@@ -876,7 +877,7 @@ Line Status Register:
 | 7   | FIFO Error               | FIFO-related error.                  |
 
 
-## 14.3 Exposed Interface
+## .3 Exposed Interface
 
 | Function                                    | Description                               |
 | ------------------------------------------- | ----------------------------------------- |
@@ -889,10 +890,10 @@ Line Status Register:
 | `serial_available()` (TBD)                  | Check if there is input data.             |
 | `serial_flush()` (TBD)                      | Wait until pending output is transmitted. |
 
-# 15 Libraries
+# 17 Libraries
 we choose to implement c stl stuff out of minimalism?
 
-# 15 Sources
+# 18 Sources
 - Tool Interface Standard (TIS) Executable and Linking Format (ELF) Specification.
 - https://wiki.osdev.org/ATA_PIO_Mode
 
