@@ -390,7 +390,7 @@ Notes:
 Once PIC and IDT have been set up, an IRQ needs to be unmasked to enable it.
 
 ## .x Interrupt List
-There are 256 possible IDT entries, one for each interrupt number. Only a few of them are needed in this OS, and so only those are configured. Software interrupts can be assigned freely, but we follow typical conventions for them.
+There are 256 possible IDT entries, one for each interrupt number. Only a few of them are needed in this OS, and so only those are configured. Software interrupts and hardware IRQs can be assigned freely, but we follow typical conventions for them.
 
 List of configured interrupts:
 
