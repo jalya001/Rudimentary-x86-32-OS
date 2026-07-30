@@ -302,7 +302,9 @@ Kernel stack starts with dummy context to restore from
 list of the daemons we have?
 
 ## .x Initialization
-Make a dummy process, and then jump to the first real process.
+Make a dummy process (a trampoline), and then jump to the first real process.
+
+That consists of making dummy blocks and a dummy usermode context that needs to be iret'ed from.
 
 # 5 Protection
 It is useful to have a distinction between different privilege levels for protection purposes, although there is not much to protect in this case. Still, there are many important features built into the CPU that occur upon changing privilege levels, and so for a complete implementation of a simple orthodox OS, it is necessary.
