@@ -306,6 +306,30 @@ Make a dummy process (a trampoline), and then jump to the first real process.
 
 That consists of making dummy blocks and a dummy usermode context on its kernel stack that needs to be iret'ed from to begin the process in usermode. Then, the process yields to the next process.
 
+We need to set its EFLAGS:
+
+Non-reserved EFLAG bits:
+
+| Bit   | Name | Description                          | Value to set |
+| ----  | ---- | ------------------------------------ | |
+|     0 | CF   | Carry Flag                           | |
+|     2 | PF   | Parity Flag                          | |
+|     4 | AF   | Auxiliary Carry                      | |
+|     6 | ZF   | Zero Flag                            | |
+|     7 | SF   | Sign Flag                            | |
+|     8 | TF   | Trap Flag (single-step debugging)    | |
+|     9 | IF   | Interrupt Enable Flag                | |
+|    10 | DF   | Direction Flag (string instructions) | |
+|    11 | OF   | Overflow Flag                        | |
+| 12–13 | IOPL | I/O Privilege Level                  | |
+|    14 | NT   | Nested Task                          | |
+|    16 | RF   | Resume Flag                          | |
+|    17 | VM   | Virtual-8086 Mode                    | |
+|    18 | AC   | Alignment Check                      | |
+|    19 | VIF  | Virtual Interrupt Flag               | |
+|    20 | VIP  | Virtual Interrupt Pending            | |
+|    21 | ID   | CPUID available                      | |
+
 # 5 Protection
 It is useful to have a distinction between different privilege levels for protection purposes, although there is not much to protect in this case. Still, there are many important features built into the CPU that occur upon changing privilege levels, and so for a complete implementation of a simple orthodox OS, it is necessary.
 
