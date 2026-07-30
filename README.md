@@ -182,6 +182,9 @@ Remarks:
 
 TODO: Some unncessary information is not being stripped.
 
+### 3.1.2 Programs
+write into the filesystem?
+
 ## 3.2 Bootblock
 Our bootloader consists only of the first sector bootblock. The boot sector and first instruction of the bootblock need to be located at 0x07C00 in memory, and occupy precisely 512 bytes (1 sector).
 
