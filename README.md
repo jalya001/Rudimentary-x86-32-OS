@@ -11,14 +11,14 @@ The OS has the following attributes and properties:
 | --------------------------- | - | --- |
 | x86-based                   | Y | Supports x86 processors only. Note x86 is little endian. |
 | BIOS-booted                 | Y | Given x86 typically uses BIOS, this is only natural. |
-| Uniprocessor                | - | That only one task is running at a time. It does not utilize multiple cores. |
+| Uniprocessor                | Y | That only one task is running at a time. It does not utilize multiple cores. |
 | Monolithic                  | - | OS services run in the kernel space. |
 | Preemptive Scheduling       | - | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
 | Multitasking                | - | Multiple threads and programs residing in memory at once. |
 | Demand-paged                | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
 | Simplified Unix File System | - | Including inodes. |
-| Simple Privilege Levels     | - | . |
-| System Call Interface       | - | We have system calls. |
+| Simple Privilege Levels     | Y | . |
+| System Call Interface       | Y | We have system calls. |
 | Traditional Synchronization | - | We have all the synchronization primitives. |
 | Static Device Drivers       | - | All device drivers are hard-coded into the OS, and only keyboard, disk, serial, and screen are supported. |
 | ATA PIO Disk Driver         | - | very simple |
