@@ -1,3 +1,4 @@
+#include <minstd/types.hpp>
 #include "serial.hpp"
 
 void outb(unsigned short port, unsigned char val) {
@@ -63,4 +64,43 @@ void serial_print(int value) {
   }
 
   while (i > 0) serial_write(buffer[--i]);
+}
+
+extern "C" void kprintf(const char* fmt, ...) {
+  uint32_t* args = (uint32_t*)(&fmt + 1);
+
+  while (*fmt) {
+    if (*fmt != '%') {
+      serial_print(*fmt++);
+      continue;
+    }
+
+    fmt++;
+
+    switch (*fmt) {
+    case 'd': {
+      int value = (int)*args++;
+      serial_print(value);
+      break;
+    }
+
+    case 's': {
+      const char* value = (const char*)*args++;
+      serial_print(value);
+      break;
+    }
+
+    case 'c': {
+      char value = (char)*args++;
+      serial_print(value);
+      break;
+    }
+
+    case '%':
+      serial_print('%');
+      break;
+    }
+
+    fmt++;
+  }
 }

@@ -1,56 +1,96 @@
 #include "drivers/serial.hpp"
 #include "drivers/vga.hpp"
+#include "kernel.hpp"
+#include "gdt.hpp"
+#include "entry.hpp"
+#include "scheduler.hpp"
+#include "interrupts.hpp"
+#include <common.hpp>
+#include "test.hpp"
+#include "pic.hpp"
 
 extern "C" void kernel_main();
 
-char msg[] = "Hello";
-char strbuf[] = {'H', 'O', 'O', 'T'};
+tcb_t *current_running = 0;
+syscall_t syscalls[256];
+
+#define PROCESS_LIMIT 8
+#define THREAD_LIMIT 12
+
+IdAllocator pid_allocator = { 1, PROCESS_LIMIT }; // temporarily, we are using id for indexing tables 
+IdAllocator tid_allocator = { 1, THREAD_LIMIT };
+Process* processes[PROCESS_LIMIT];
+Thread* threads[THREAD_LIMIT];
+
+/*
+uint32_t stack_counter = 0;
+
+uint32_t allocate_stack() { // temporary until proper stack manager is made
+  uintptr_t base = STACKS_START + stack_counter * STACK_SIZE;
+  Stack stack = { base, base };
+  stack_counter++;
+  return base;
+}
+
+uint32_t thread_create(enum ThreadType type) {
+  uint32_t tid = tid_allocator.allocate_id();
+  if (tid < 0) return tid;
+  thread[tid-1] = { tid, TaskState.READY, allocate_stack(), type == ThreadType.USER ? allocate_stack() : 0 };
+  if (ThreadType.USER) {
+    buffer_zero(thread[tid-1].stack.sp - 16, 16); // 16 is context size?
+    *(thread[tid-1].stack.sp - 16) = &dummy_point; // when the context gets popped we want it to
+  }
+  return tid;
+}
+
+uint32_t process_create() {
+  uint32_t pid = pid_allocator.allocate_id();
+  if (pid < 0) return pid;
+  thread[pid-1] = { pid, TaskState.READY, 0, thread_create() };
+  return pid;
+}
+
+*/
+
+void fd_write(int fd, const char *msg) { // fd not used yet though
+  serial_print(msg);
+  vga_write(msg);
+}
+
+extern "C" void fault_print(const char* name, uint32_t error) {
+  kprintf("%s=%d\n", name, error);
+}
+
+void init_syscalls() {
+  syscalls[SYS_YIELD] = (syscall_t)yield;
+  syscalls[SYS_EXIT] = (syscall_t)exit;
+  syscalls[SYS_WRITE] = (syscall_t)fd_write;
+}
+
+extern "C" void syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg2, uint32_t arg3) { // could have used the trapframe instead but lazy
+  syscalls[syscall_id](arg1, arg2, arg3);
+}
+
 void kernel_main() {
   init_serial();
   init_vga();
+  init_gdt();
+  pic_remap();
+  init_interrupts();
+  init_syscalls();
 
-  vga_write("hello world\n");
+  serial_print("Hello World.\n");
+  vga_write("Hello World\n");
 
-  serial_print('A');
-  serial_print('B');
-  serial_print('C');
-  serial_print(msg);
-  serial_print(msg);
-  serial_print(124214214);
-  serial_print(strbuf,4);
-  serial_print("Hello World 1.\n");
-  serial_print("Hello World 2.\n");
-  serial_print("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.\n");
-  
-  
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('K');
-  vga_put_char('\n');
-  vga_write("hello world 1\n");
-  vga_write("hello world 2\n");
-  vga_write("hello world 3\n");
-  vga_write("hello world 4\n");
-  vga_write("hello world 5\n");
-  vga_write("hello world 6\n");
-  vga_write("hello world 7\n");
-  vga_write("hello world 8\n");
-  vga_scroll(3);
-  vga_write("hello world 9\n");
-  vga_write("hello world 10\n");
-  vga_write("hello world 11\n");
-  
-  serial_print("finit.\n");
-  
+  leave_critical();
+
+  // create a trampoline process before it goes to the first process
+  // ...
+
+  // test
+  test();
 
   while (1) {
-      asm volatile ("hlt");
+    asm volatile ("hlt");
   }
 }

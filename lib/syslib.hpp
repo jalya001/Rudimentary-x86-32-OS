@@ -1,16 +1,18 @@
-/* Exposes all system calls. */
+#pragma once
 
-void yield(void);
-void exit(void);
+void call_yield(void);
+void call_exit(void);
 int getpid(void);
 
 int mbox_open(int key);
 int mbox_close(int q);
 int mbox_stat(int q, int *count, int *space);
-int mbox_recv(int q, msg_t * m);
-int mbox_send(int q, msg_t * m);
+int mbox_recv(int q, char *m);
+int mbox_send(int q, char *m);
 
 int getchar(int *c);
+
+void call_write(const char *msg);
 
 int readdir(unsigned char *buf);
 void loadproc(int location, int size);
