@@ -311,7 +311,7 @@ We need to set its EFLAGS:
 Non-reserved EFLAG bits:
 
 | Bit   | Name | Description                          | Value to set |
-| ----  | ---- | ------------------------------------ | |
+| ----  | ---- | ------------------------------------ | ------------ |
 |     0 | CF   | Carry Flag                           | |
 |     2 | PF   | Parity Flag                          | |
 |     4 | AF   | Auxiliary Carry                      | |
@@ -463,6 +463,46 @@ TSS esp0 is set during dispatch? so that an interrupt can find the appropriate s
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
 (pit) generate irq0 -> (pic) send irq0 to cpu -> (cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
+
+```mermaid
+flowchart TD
+
+T0{{R0-thread is running}}
+
+T3{{R3-thread is running}}
+
+T0-->A
+T0-->Y
+T3-->YS(Yield system call)
+T3-->A
+
+YS-->II[[Appropriate interrupt handling beginning]]
+
+A(Timer interrupt) --> II
+
+II --> B{Where is the CPU?}
+
+B -->|Ring 3| C[CPU switches to the thread's kernel stack]
+B -->|Ring 0| E
+
+Y(Direct yield call) --> E
+
+C --> E[[Scheduler]]
+E--> SK[Switches ESP to next thread's kernel stack]
+SK-->CT[The new thread's context is restored from that stack]
+
+CT --> F{Was interrupt?}
+F-->|Yes| IE[[Appropriate interrupt handling ending]]
+IE-->IR[iret]
+
+F -->|No| ER([Execution resumes])
+IR --> DR{Destination}
+
+DR-->|Ring 3| H[CPU switches to the new thread's user ESP/SS]
+DR-->|Ring 0| ER
+H-->ER
+
+```
 
 
 # 9 Synchronization
