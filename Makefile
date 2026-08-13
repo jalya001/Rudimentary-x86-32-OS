@@ -1,5 +1,7 @@
-CC = g++
-LD = ld
+CC ?= g++
+LD ?= ld
+OBJCOPY ?= objcopy
+HOSTCXX ?= g++
 
 TOOLS = tools
 BOOT = boot
@@ -47,7 +49,7 @@ $(BUILD)/bootblock.o: ${BOOT}/bootblock.s | $(BUILD)
 
 bootblock: $(BUILD)/bootblock.o | $(BUILD)
 	$(LD) $(LDOPTS) -Ttext 0x0 -o $(BUILD)/bootblock.elf $<
-	objcopy -O binary $(BUILD)/bootblock.elf $(BUILD)/bootblock
+	$(OBJCOPY) -O binary $(BUILD)/bootblock.elf $(BUILD)/bootblock
 
 lib: $(LIB_CXX_OBJ)
 
@@ -57,10 +59,10 @@ $(BUILD)/user/%: $(BUILD)/user/%.o $(LIB_CXX_OBJ)
 	$(LD) $(LDOPTS) -Ttext 0x0 -o $@ $^
 
 $(BUILD)/createimage.o: $(TOOLS)/createimage.cpp | $(BUILD)
-	$(CC) -c -o $@ $<
+	$(HOSTCXX) -c -o $@ $<
 
 createimage: $(BUILD)/createimage.o
-	$(CC) -o $(BUILD)/createimage $<
+	$(HOSTCXX) -o $(BUILD)/createimage $<
 
 image: bootblock createimage kernel.elf user_programs lib
 	./build/createimage --extended ./build/bootblock ./build/kernel.elf $(USER_BINS)

@@ -1,8 +1,7 @@
-#include <elf.h>
+#include "elf32.hpp"
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/sendfile.h>
 
 #define OUTPUT_FILE "image"
 #define SECTOR_SIZE 512 
@@ -83,6 +82,25 @@ uint32_t count_sectors(uint32_t size) { // Assumes it has already been rounded u
   return size / SECTOR_SIZE;
 }
 
+// Portable replacement for Linux's sendfile(): copies `size` bytes starting
+// at `offset` in `in_fd` to the current position of `out_fd`. sendfile()'s
+// signature differs between Linux and macOS/BSD, so a plain read/write loop
+// is used instead — simpler and works everywhere.
+int copy_range(int out_fd, int in_fd, off_t offset, off_t size) {
+  if (lseek(in_fd, offset, SEEK_SET) == (off_t)-1) return -1;
+  char buf[8192];
+  off_t remaining = size;
+  while (remaining > 0) {
+    ssize_t chunk = remaining < (off_t)sizeof(buf) ? remaining : (off_t)sizeof(buf);
+    ssize_t n = read(in_fd, buf, chunk);
+    if (n <= 0) return -1;
+    ssize_t written = write(out_fd, buf, n);
+    if (written != n) return -1;
+    remaining -= n;
+  }
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   uint32_t kernel_size = 0;
@@ -116,8 +134,7 @@ int main(int argc, char **argv)
   rc = lseek(image, 0, SEEK_SET); // maybe unnecessary
     
   for (int i = 0; i < file_count; i++) {
-    off_t src_offset = file_infos[i].start_offset;
-    rc = sendfile(image, file_infos[i].fd, &src_offset, file_infos[i].stripped_size); // NB sendfile advances pointer
+    rc = copy_range(image, file_infos[i].fd, file_infos[i].start_offset, file_infos[i].stripped_size);
     rc = close(file_infos[i].fd);
   }
 
