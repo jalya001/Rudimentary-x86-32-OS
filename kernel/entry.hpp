@@ -7,4 +7,6 @@ extern "C" {
   void interrupt_entry();
   void syscall_entry();
   void timer_handler();
+  void kthread_trampoline();
+  void uthread_trampoline();
 }

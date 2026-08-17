@@ -15,9 +15,12 @@ tim_msg:
 .globl scheduler_entry
 .globl syscall_entry
 .globl timer_handler
+.globl kthread_trampoline
+.globl uthread_trampoline
 
 .extern syscall_handler
 .extern save_and_get_next_esp
+.extern exit
 
 enter_critical:
   cli
@@ -79,4 +82,30 @@ syscall_entry:
 
   popal
 
+  iret
+
+# Reached via `ret` from scheduler_entry the first time a kernel thread runs.
+# ebx = entry point (placed there by init_kernel_thread_stack).
+kthread_trampoline:
+  call *%ebx
+  call exit         # in case entry_fn ever return, terminate cleanly
+1:
+  hlt
+  jmp 1b
+
+# Reached via `ret` from scheduler_entry the first time a user thread runs.
+# ebx = entry point, esi = user stack (placed there by init_user_thread_stack).
+uthread_trampoline:
+  push $0x23         # USER_SS
+  push %esi          # user esp
+  push $0x202        # EFLAGS (IF set)
+  push $0x1B         # USER_CS
+  push %ebx          # entry point (eip)
+
+  mov $0x23, %ax
+  mov %ax, %ds
+  mov %ax, %es
+  mov %ax, %fs
+  mov %ax, %gs
+  
   iret
