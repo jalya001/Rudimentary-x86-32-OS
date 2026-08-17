@@ -1,0 +1,7 @@
+megs: 32
+romimage: file=$BXSHARE/BIOS-bochs-latest
+vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest.bin
+ata0-master: type=disk, path="boot_img_test", mode=flat, cylinders=80, heads=2, spt=18
+boot: disk
+log: bochsout.txt
+display_library: sdl2
