@@ -41,6 +41,8 @@ timer_handler: # does nothing for now
   mov $0x20, %al
   out %al, $0x20
 
+  call scheduler_entry
+
   popa
   iret
 
