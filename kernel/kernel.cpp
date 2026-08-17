@@ -93,7 +93,19 @@ void kernel_main() {
 
   leave_critical();
 
+  /* A placeholder TCB representing kernel_main's own execution context, so
+   * switching away from it doesn't collide with the first real thread.
+   */
+  static Thread boot_thread = {};
+  boot_thread.tid = 0;
+  boot_thread.state = READY;
+  boot_thread.next = &boot_thread;
+  boot_thread.prev = &boot_thread;
+  current_running = &boot_thread;
+
   thread_create(test_writes, true);
+
+  yield();    // hand off to the first real thread
 
   while (1) {
     asm volatile ("hlt");
