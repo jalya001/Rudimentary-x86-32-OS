@@ -12,7 +12,13 @@ void yield() {
   scheduler_entry();
   leave_critical();
 }
-  
+
+extern "C" uint32_t save_and_get_next_esp(uint32_t old_esp) {
+  current_running->kernel_stack.sp = old_esp;
+  scheduler();
+  return current_running->kernel_stack.sp;
+}
+
 void scheduler() {
   tcb_t *to_remove;
   switch (current_running->state) {

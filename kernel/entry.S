@@ -17,6 +17,7 @@ tim_msg:
 .globl timer_handler
 
 .extern syscall_handler
+.extern save_and_get_next_esp
 
 enter_critical:
   cli
@@ -41,6 +42,22 @@ timer_handler: # does nothing for now
   iret
 
 scheduler_entry:
+  pusha
+  push %ds
+  push %es
+  push %fs
+  push %gs
+
+  push %esp
+  call save_and_get_next_esp
+  add $4, %esp
+  mov %eax, %esp
+
+  pop %gs
+  pop %fs
+  pop %es
+  pop %ds
+  popa
   ret
 
 syscall_entry:
