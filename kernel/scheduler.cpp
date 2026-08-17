@@ -29,9 +29,9 @@ void scheduler() {
     case EXITED:
       // cleanup of PCB is supposed to happen at process' exit call?
       if (current_running->next == current_running) halt();
-      current_running = current_running->next;
       to_remove = current_running;
-      to_remove->prev->next = current_running;
+      current_running = current_running->next;
+      to_remove->prev->next = to_remove->next;
       to_remove->next->prev = to_remove->prev;
       to_remove->next = 0;
       to_remove->prev = 0;
