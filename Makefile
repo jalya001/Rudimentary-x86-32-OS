@@ -10,7 +10,7 @@ KERNEL = kernel
 USER = user
 LIB = lib
 
-CCOPTS = -std=gnu++17 -O2 -m32 -Wall -g -c -fno-builtin -fno-stack-protector \
+CCOPTS = -std=gnu++17 -O0 -m32 -Wall -g -c -fno-builtin -fno-stack-protector \
          -march=i386 -ffreestanding -nostdlib -nostdinc -Ilib -fno-pic -fno-pie \
          -fno-exceptions -fno-rtti
 

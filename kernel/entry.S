@@ -30,13 +30,13 @@ leave_critical:
   sti
   ret
 
-timer_handler: # does nothing for now
+timer_handler:
   pusha
 
-  push $0
-  push $tim_msg
-  call fault_print
-  add $8, %esp
+  # push $0
+  # push $tim_msg
+  # call fault_print
+  # add $8, %esp
 
   mov $0x20, %al
   out %al, $0x20
@@ -53,7 +53,7 @@ scheduler_entry:
   push %fs
   push %gs
 
-  push %esp
+  push %esp # should change these not to need passing through the stack at some point
   call save_and_get_next_esp
   add $4, %esp
   mov %eax, %esp

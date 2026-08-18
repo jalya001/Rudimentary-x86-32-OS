@@ -86,6 +86,7 @@ uint32_t count_sectors(uint32_t size) { // Assumes it has already been rounded u
 // at `offset` in `in_fd` to the current position of `out_fd`. sendfile()'s
 // signature differs between Linux and macOS/BSD, so a plain read/write loop
 // is used instead — simpler and works everywhere.
+// NOTE: this function makes more copies than sendfile and should be replaced in the future
 int copy_range(int out_fd, int in_fd, off_t offset, off_t size) {
   if (lseek(in_fd, offset, SEEK_SET) == (off_t)-1) return -1;
   char buf[8192];
@@ -101,8 +102,7 @@ int copy_range(int out_fd, int in_fd, off_t offset, off_t size) {
   return 0;
 }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   uint32_t kernel_size = 0;
   uint32_t kernel_entry = 0;
   int rc;
