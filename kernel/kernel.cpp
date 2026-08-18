@@ -125,7 +125,6 @@ void kernel_main() {
   thread_create<true>(test_writes_2);
   thread_create<true>(test_writes_3);
 
-  leave_critical();
   yield();    // hand off to the first real thread
 
   while (1) {
