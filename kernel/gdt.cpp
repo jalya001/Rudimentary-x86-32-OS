@@ -27,6 +27,9 @@ void load_gdt() {
     "mov %%ax, %%ds         \n"
     "mov %%ax, %%es         \n"
     "mov %%ax, %%ss         \n"
+    //"mov %%ax, %%fs         \n"
+    //"mov %%ax, %%gs         \n"
+    
 
     "mov $0x28, %%ax        \n"
     "ltr %%ax               \n"

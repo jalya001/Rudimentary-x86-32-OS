@@ -91,13 +91,13 @@ syscall_entry:
 kthread_trampoline:
   call *%ebx
   call exit         # in case entry_fn ever return, terminate cleanly
-1:
-  hlt
-  jmp 1b
+
 
 # Reached via `ret` from scheduler_entry the first time a user thread runs.
 # ebx = entry point, esi = user stack (placed there by init_user_thread_stack).
 uthread_trampoline:
+
+  # iret frame
   push $0x23         # USER_SS
   push %esi          # user esp
   push $0x202        # EFLAGS (IF set)

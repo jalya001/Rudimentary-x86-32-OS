@@ -26,7 +26,7 @@ void fd_write(int fd, const char *msg) { // fd not used yet though
 }
 
 extern "C" void fault_print(const char* name, uint32_t error) {
-  kprintf("%s=%d\n", name, error);
+  kprintf("%s=%d (not necessarily an error code)\n", name, error);
 }
 
 void init_syscalls() {
@@ -64,16 +64,16 @@ tcb_t *thread_create(void (*entry_fn)()) {
   * points at a trampoline instead of a real saved code. Field order here
   * mirrors what scheduler_entry itself pushes/pops.
   */
-  uint8_t *top = (uint8_t *)t->kernel_stack.sp;
+  uint8_t *top = (uint8_t *)t->kernel_stack.top;
   top -= sizeof(SwitchFrame);
   auto *frame = (SwitchFrame *)top;
-  t->kernel_stack.sp = (uint32_t)(uintptr_t)frame;
+  t->kernel_stack.sp = (uintptr_t)frame;
   *frame = {};
   frame->gs = 0x10;
   frame->fs = 0x10;
   frame->es = 0x10;
   frame->ds = 0x10;
-  frame->ebx = (uint32_t)(uintptr_t)entry_fn; // both trampolines read this
+  frame->ebx = (uintptr_t)entry_fn; // both trampolines read this
 
   if constexpr (User) {
     t->user_stack = stack_allocator.allocate();
@@ -83,7 +83,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
   } else {
     frame->return_eip = (uint32_t)(uintptr_t)kthread_trampoline;
   }
-
+/*
   if (current_running) {
     t->next = current_running;
     t->prev = current_running->prev;
@@ -94,8 +94,15 @@ tcb_t *thread_create(void (*entry_fn)()) {
     t->prev = t;
     current_running = t;
   }
-
+*/
   return t;
+}
+
+void set_thread_sequence(Thread *threads, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    threads[i].prev = &threads[(i + count - 1) % count];
+    threads[i].next = &threads[(i + 1) % count];
+  }
 }
 
 void kernel_main() {
@@ -113,17 +120,24 @@ void kernel_main() {
   /* A placeholder TCB representing kernel_main's own execution context, so
    * switching away from it doesn't collide with the first real thread.
    */
+   /*
   static Thread boot_thread = {};
   boot_thread.tid = 0;
   boot_thread.state = READY;
   boot_thread.kernel_stack = stack_allocator.allocate();
-  boot_thread.next = &boot_thread;
+  boot_thread.next = &thread_pool[0];
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
+  */
+  thread_create<true>(0);
+  thread_pool[0].state = EXITED;
+  current_running = &thread_pool[0];
 
   thread_create<true>(test_writes);
   thread_create<true>(test_writes_2);
   thread_create<true>(test_writes_3);
+
+  set_thread_sequence(thread_pool, 4);
 
   yield();    // hand off to the first real thread
 

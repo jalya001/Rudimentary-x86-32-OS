@@ -21,7 +21,7 @@ enum TaskState {
 };
 
 struct Stack {
-  uintptr_t base;
+  uintptr_t top;
   uintptr_t sp;
 };
 
@@ -30,7 +30,7 @@ struct StackAllocator {
 
   Stack allocate() {
     Stack stack;
-    stack.base = next;
+    stack.top = next + STACK_SIZE;
     stack.sp = next + STACK_SIZE;
     if (stack.sp > STACKS_END) return {0, 0}; // out of stacks
     next += STACK_SIZE;
