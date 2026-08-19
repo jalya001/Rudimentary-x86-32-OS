@@ -464,6 +464,7 @@ TSS esp0 is set during dispatch? so that an interrupt can find the appropriate s
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
+direct yield/exit calls from r0 need to disable interrupts too. but if you do so:
 problem: how do you reenable interrupts after switch to an r0 thread? solution: both r0 and r3 threads have to push an iret frame so the flag of interrupts being enabled can be restored
 
 
