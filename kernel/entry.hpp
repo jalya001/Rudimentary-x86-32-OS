@@ -9,4 +9,5 @@ extern "C" {
   void timer_handler();
   void kthread_trampoline();
   void uthread_trampoline();
+  void startup_trampoline();
 }

@@ -17,6 +17,7 @@ tim_msg:
 .globl timer_handler
 .globl kthread_trampoline
 .globl uthread_trampoline
+.globl startup_trampoline
 
 .extern syscall_handler
 .extern save_and_get_next_esp
@@ -46,6 +47,9 @@ timer_handler:
   popa
   iret
 
+startup_trampoline:
+  jmp startup_trampoline_2
+
 scheduler_entry:
   pusha
   push %ds
@@ -58,6 +62,7 @@ scheduler_entry:
   add $4, %esp
   mov %eax, %esp
 
+startup_trampoline_2:
   pop %gs
   pop %fs
   pop %es
