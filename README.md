@@ -464,6 +464,9 @@ TSS esp0 is set during dispatch? so that an interrupt can find the appropriate s
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
+problem: how do you reenable interrupts after switch to an r0 thread? solution: both r0 and r3 threads have to push an iret frame so the flag of interrupts being enabled can be restored
+
+
 (pit) generate irq0 -> (pic) send irq0 to cpu -> (cpu?) irq0 received -> (cpu?) privilege transition -> (entry) irq0 handler -> (entry) save context -> (scheduler) find and prepare next thread -> (entry?) EOI -> (entry?) load context -> return
 
 ```mermaid
@@ -475,7 +478,7 @@ T3{{R3-thread is running}}
 
 T0-->A
 T0-->Y
-T3-->YS(Yield system call)
+T3-->YS(Yield/exit system call)
 T3-->A
 
 YS-->II[[Appropriate interrupt handling beginning]]
@@ -487,7 +490,7 @@ II --> B{Where is the CPU?}
 B -->|Ring 3| C[CPU switches to the thread's kernel stack]
 B -->|Ring 0| E
 
-Y(Direct yield call) --> E
+Y(Direct yield/exit call) --> E
 
 C --> E[[Scheduler]]
 E--> SK[Switches ESP to next thread's kernel stack]
