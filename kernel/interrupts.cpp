@@ -22,6 +22,7 @@ void init_interrupts() {
   idt_set_gate(0x0D, (uint32_t)general_protection_handler, KERNEL_CS, INTERRUPT_GATE);
   idt_set_gate(32, (uint32_t)timer_handler, KERNEL_CS, INTERRUPT_GATE);
   idt_set_gate(0x80, (uint32_t)syscall_entry, KERNEL_CS, 0xEE);
+  idt_set_gate(14, (uint32_t)page_fault_handler, KERNEL_CS, INTERRUPT_GATE);
 
   idtp.limit = sizeof(idt) - 1;
   idtp.base  = (uint32_t)&idt;
