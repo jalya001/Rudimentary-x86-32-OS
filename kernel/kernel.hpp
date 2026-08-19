@@ -26,15 +26,26 @@ struct Stack {
 };
 
 struct StackAllocator {
-  uintptr_t next = STACKS_START;
+  static constexpr uint32_t NUM_SLOTS = (STACKS_END - STACKS_START) / STACK_SIZE;
+  uint16_t used_mask = 0;   // bit i set = slot i currently in use
 
   Stack allocate() {
-    Stack stack;
-    stack.base = next;
-    stack.sp = next + STACK_SIZE;
-    if (stack.sp > STACKS_END) return {0, 0}; // out of stacks
-    next += STACK_SIZE;
-    return stack;
+    for (uint32_t i = 0; i < NUM_SLOTS; i++) {
+      if (!(used_mask & (1 << i))) {
+        used_mask |= (1 << i);
+        Stack stack;
+        stack.base = STACKS_START + i * STACK_SIZE;
+        stack.sp = stack.base + STACK_SIZE;
+        return stack;
+      }
+    }
+    return {0, 0};    // out of stacks
+  }
+
+  void free(Stack stack) {
+    if (stack.base < STACKS_START || stack.base >= STACKS_END) return;  // never allocated by us
+    uint32_t i = (stack.base - STACKS_START) / STACK_SIZE;
+    used_mask &= ~(1 << i);
   }
 };
 typedef struct Thread {
@@ -73,7 +84,9 @@ struct IdAllocator {
 typedef int (*syscall_t) (...);
 extern syscall_t syscalls[256];
 extern tcb_t *current_running;
+extern tcb_t *zombie;   // thread that exited last cycle: its stacks are reaped on the next switch
 extern IdAllocator tid_allocator;
+extern StackAllocator stack_allocator;
 extern Thread thread_pool[THREAD_LIMIT];
 
 struct SwitchFrame {
