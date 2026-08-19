@@ -4,7 +4,9 @@
 #include "entry.hpp"
 
 static inline void halt() {
-  asm volatile("hlt");
+  while (1) {
+    asm volatile("hlt");
+  }
 }
 
 void yield() {
