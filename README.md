@@ -43,6 +43,8 @@ Have to compile without thunking so we can control where code is
 
 correct bochs configuration?
 
+TODO: feed dependencies to makefile to avoid getting trolled
+
 # 2 Design Overview
 | Section |
 | --- |
