@@ -17,7 +17,7 @@ syscall_t syscalls[256];
 StackAllocator stack_allocator;
 IdAllocator pid_allocator = { 1, PROCESS_LIMIT }; // temporarily, we are using id for indexing tables 
 IdAllocator tid_allocator = { 1, THREAD_LIMIT };
-Process* processes[PROCESS_LIMIT];
+Process processes[PROCESS_LIMIT];
 Thread thread_pool[THREAD_LIMIT];     // static pool: no heap/allocator exists yet
 
 void fd_write(int fd, const char *msg) { // fd not used yet though
@@ -105,6 +105,10 @@ void set_thread_sequence(Thread *threads, size_t count) {
   }
 }
 
+void finish_init() {
+  leave_critical();
+}
+
 void kernel_main() {
   init_serial();
   init_vga();
@@ -129,7 +133,7 @@ void kernel_main() {
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
   */
-  thread_create<true>(0);
+  thread_create<false>(finish_init);
   thread_pool[0].state = EXITED;
   current_running = &thread_pool[0];
 
@@ -137,9 +141,9 @@ void kernel_main() {
   thread_create<true>(test_writes_2);
   thread_create<true>(test_writes_3);
 
-  set_thread_sequence(thread_pool, 4);
+  set_thread_sequence(thread_pool, 5);
 
-  yield();    // hand off to the first real thread
+  exit();    // hand off to the first real thread
 
   while (1) {
     asm volatile ("hlt");

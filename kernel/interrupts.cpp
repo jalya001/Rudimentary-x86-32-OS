@@ -42,6 +42,6 @@ void init_interrupts() {
   idt_set_gate(0x80, (uint32_t)syscall_entry, KERNEL_CS, 0xEE);
 
   idtp.limit = sizeof(idt) - 1;
-  idtp.base  = (uint32_t)&idt;
+  idtp.base = (uint32_t)&idt;
   asm volatile("lidt %0" : : "m"(idtp));
 }
