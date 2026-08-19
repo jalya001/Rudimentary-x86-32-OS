@@ -41,7 +41,7 @@ void scheduler() {
   }
   
   current_running->state = READY;
-  tss.esp0 = current_running->kernel_stack.sp;
+  tss.esp0 = current_running->kernel_stack.base + STACK_SIZE;
 }
 
 void exit() {
