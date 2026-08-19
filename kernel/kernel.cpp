@@ -8,6 +8,7 @@
 #include <common.hpp>
 #include "test.hpp"
 #include "pic.hpp"
+#include <sleep.hpp>
 
 extern "C" void kernel_main();
 
@@ -89,13 +90,21 @@ tcb_t *thread_create(void (*entry_fn)()) {
     t->prev = current_running->prev;
     current_running->prev->next = t;
     current_running->prev = t;
-  } else {
+  } else { // this shouldn't happen anyway
     t->next = t;
     t->prev = t;
     current_running = t;
   }
 
   return t;
+}
+
+void kthread1() {
+  while (1) {
+    sleep(1000);
+    serial_print("hello\n");
+    vga_write("hello\n");
+  }
 }
 
 void kernel_main() {
@@ -109,27 +118,21 @@ void kernel_main() {
   serial_print("Hello World.\n");
   vga_write("Hello World\n");
 
-
   /* A placeholder TCB representing kernel_main's own execution context, so
    * switching away from it doesn't collide with the first real thread.
    */
-   /*
+   
   static Thread boot_thread = {};
-  boot_thread.tid = 0;
-  boot_thread.state = READY;
-  boot_thread.kernel_stack = stack_allocator.allocate();
-  boot_thread.next = &thread_pool[0];
+  boot_thread.next = &boot_thread;
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
-  */
-  thread_create<false>(0);
 
   thread_create<true>(test_writes);
+  thread_create<false>(kthread1);
   thread_create<true>(test_writes_2);
   thread_create<true>(test_writes_3);
 
-  //set_thread_sequence(thread_pool, 5);
-
+  //leave_critical();
   exit();    // hand off to the first real thread
 
   while (1) {
