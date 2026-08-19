@@ -83,7 +83,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
   } else {
     frame->return_eip = (uint32_t)(uintptr_t)kthread_trampoline;
   }
-/*
+
   if (current_running) {
     t->next = current_running;
     t->prev = current_running->prev;
@@ -94,19 +94,8 @@ tcb_t *thread_create(void (*entry_fn)()) {
     t->prev = t;
     current_running = t;
   }
-*/
+
   return t;
-}
-
-void set_thread_sequence(Thread *threads, size_t count) {
-  for (size_t i = 0; i < count; ++i) {
-    threads[i].prev = &threads[(i + count - 1) % count];
-    threads[i].next = &threads[(i + 1) % count];
-  }
-}
-
-void finish_init() {
-  leave_critical();
 }
 
 void kernel_main() {
@@ -133,15 +122,13 @@ void kernel_main() {
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
   */
-  thread_create<false>(finish_init);
-  thread_pool[0].state = EXITED;
-  current_running = &thread_pool[0];
+  thread_create<false>(0);
 
   thread_create<true>(test_writes);
   thread_create<true>(test_writes_2);
   thread_create<true>(test_writes_3);
 
-  set_thread_sequence(thread_pool, 5);
+  //set_thread_sequence(thread_pool, 5);
 
   exit();    // hand off to the first real thread
 
