@@ -33,3 +33,15 @@ void test_after_exit() {
 void noop_thread() {
   while (1) { call_yield(); }
 }
+
+void stress_a() { 
+  while (1) { 
+    call_write("A\n"); 
+  } 
+}
+
+void stress_b() { 
+  while (1) { 
+    call_write("B\n"); 
+  } 
+}

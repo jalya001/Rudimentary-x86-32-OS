@@ -131,7 +131,7 @@ void kernel_main() {
 
   /*thread_create<true>(test_writes);
   thread_create<true>(test_writes_2);
-  thread_create<true>(test_writes_3);*/
+  thread_create<true>(test_writes_3);
 
   thread_create<true>(test_exiter);
 
@@ -149,6 +149,12 @@ void kernel_main() {
     if (!thread_create<true>(noop_thread)) failures++;
   }
   fd_write(1, failures > 0 ? "Exhaustion check: OK (failed cleanly)\n" : "Exhaustion check: FAILED (should have run out of stacks)\n");
+ */
+
+  thread_create<true>(stress_a);
+  thread_create<true>(stress_b);
+  
+  fd_write(1, "Stress test starting - let this run for at least 1-2 minutes\n");
 
   yield();    // hand off to the first real thread
 
