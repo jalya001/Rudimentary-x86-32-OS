@@ -1,6 +1,15 @@
-CC ?= g++
-LD ?= ld
-OBJCOPY ?= objcopy
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+  CC = i686-elf-g++
+  LD = i686-elf-ld
+  OBJCOPY = i686-elf-objcopy
+else
+  CC ?= g++
+  LD ?= ld
+  OBJCOPY ?= objcopy
+endif
+
 HOSTCXX ?= g++
 
 TOOLS = tools
@@ -12,7 +21,7 @@ LIB = lib
 
 CCOPTS = -std=gnu++17 -O0 -m32 -Wall -g -c -fno-builtin -fno-stack-protector \
          -march=i386 -ffreestanding -nostdlib -nostdinc -Ilib -fno-pic -fno-pie \
-         -fno-exceptions -fno-rtti
+         -fno-exceptions -fno-rtti -MMD -MP
 
 LDOPTS = -melf_i386 -nostdlib -N
 
@@ -23,9 +32,14 @@ KERNEL_S := $(shell find $(KERNEL) -name '*.S')
 KERNEL_CXX_OBJ := $(patsubst %.cpp,$(BUILD)/%.o,$(KERNEL_CXX))
 KERNEL_S_OBJ := $(patsubst %.S,$(BUILD)/%.o,$(KERNEL_S))
 KERNEL_OBJS := $(KERNEL_CXX_OBJ) $(KERNEL_S_OBJ) $(LIB_CXX_OBJ)
-USER_CXX := $(shell find $(USER) -name '*.cpp')
+USER_CXX := $(shell find $(USER) -name '*.cpp' 2>/dev/null)
 USER_CXX_OBJ := $(patsubst %.cpp,$(BUILD)/%.o,$(USER_CXX))
 USER_BINS := $(patsubst user/%.cpp,$(BUILD)/user/%,$(USER_CXX))
+
+DEPS := $(KERNEL_CXX_OBJ:.o=.d) $(KERNEL_S_OBJ:.o=.d) $(LIB_CXX_OBJ:.o=.d) $(USER_CXX_OBJ:.o=.d)
+-include $(DEPS)
+
+.PHONY: all clean boot image bootblock createimage lib user_programs
 
 all: $(BUILD) bootblock createimage kernel.elf user_programs lib image
 
