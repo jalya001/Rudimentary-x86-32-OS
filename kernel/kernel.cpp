@@ -54,7 +54,17 @@ tcb_t *thread_create(void (*entry_fn)()) {
   *t = {};
   t->tid = tid;
   t->state = READY;
+
   t->kernel_stack = stack_allocator.allocate();
+  if (t->kernel_stack.sp == 0) return 0;  // out of stacks
+
+  if constexpr (User) {
+    t->user_stack = stack_allocator.allocate();
+    if (t-> user_stack.sp == 0) {
+      stack_allocator.free(t->kernel_stack);  // give back what er already took
+      return 0;
+    }
+  }
 
  /* --- thread bootstrap ---
   *
@@ -76,8 +86,6 @@ tcb_t *thread_create(void (*entry_fn)()) {
   frame->ebx = (uint32_t)(uintptr_t)entry_fn; // both trampolines read this
 
   if constexpr (User) {
-    t->user_stack = stack_allocator.allocate();
-
     frame->return_eip = (uint32_t)(uintptr_t)uthread_trampoline;
     frame->esi = (uint32_t)t->user_stack.sp; // uthread_trampoline reads this 
   } else {
