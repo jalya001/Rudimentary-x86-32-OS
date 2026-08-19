@@ -129,9 +129,26 @@ void kernel_main() {
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
 
-  thread_create<true>(test_writes);
+  /*thread_create<true>(test_writes);
   thread_create<true>(test_writes_2);
-  thread_create<true>(test_writes_3);
+  thread_create<true>(test_writes_3);*/
+
+  thread_create<true>(test_exiter);
+
+  yield(); // hands off to test_exiter — it runs to completion and exits;
+           // this yield() only returns once that's fully happened, since
+           // boot_thread and test_exiter are the only two threads right now
+  yield(); // trivial self-switch (boot_thread alone in the list) — this is
+           // what actually triggers the zombie-reaping check to run
+
+  tcb_t *reused = thread_create<true>(test_after_exit);
+  fd_write(1, reused ? "Reuse check: OK\n" : "Reuse check: FAILED\n");
+
+  int failures = 0;
+  for (int i = 0; i < 10; i++) {
+    if (!thread_create<true>(noop_thread)) failures++;
+  }
+  fd_write(1, failures > 0 ? "Exhaustion check: OK (failed cleanly)\n" : "Exhaustion check: FAILED (should have run out of stacks)\n");
 
   yield();    // hand off to the first real thread
 
