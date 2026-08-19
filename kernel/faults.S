@@ -24,6 +24,11 @@ mc_msg:  .asciz "Machine Check"
 xm_msg:  .asciz "SIMD FPU Error"
 
 
+pf_err_msg:
+  .asciz "Page Fault error"
+pf_addr_msg:
+  .asciz "Page Fault at CR2"
+
 .section .text
 
 .extern fault_print
@@ -258,11 +263,19 @@ stack_segment_handler:
 
 page_fault_handler:
 	pusha
+
 	mov 32(%esp), %eax
 	push %eax
 	push $pf_msg
 	call fault_print
 	add $8, %esp
+
+	mov %cr2, %eax
+	push %eax
+	push $pf_addr_msg
+	call fault_print
+	add $8, %esp
+
 	popa
 	cli
 1:

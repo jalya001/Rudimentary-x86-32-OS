@@ -21,4 +21,5 @@ extern "C" {
   void machine_check_handler();
   void simd_fpu_handler();
   void default_interrupt_handler();
+  void page_fault_handler();
 }
