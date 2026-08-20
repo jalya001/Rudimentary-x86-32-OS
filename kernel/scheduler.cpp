@@ -7,10 +7,8 @@ static inline void halt() {
   asm volatile("hlt");
 }
 
-void yield() {
-  enter_critical();
-  scheduler_entry();
-  leave_critical();
+void r0_yield() {
+  direct_scheduler_entry();
 }
 
 extern "C" uint32_t save_and_get_next_esp(uint32_t old_esp) {
@@ -44,7 +42,12 @@ void scheduler() {
   tss.esp0 = current_running->kernel_stack.top;
 }
 
-void exit() {
+void r0_exit() {
+  current_running->state = EXITED;
+  direct_scheduler_entry();
+}
+
+void r3_exit() { // For when interrupts already get disabled
   current_running->state = EXITED;
   scheduler_entry();
 }

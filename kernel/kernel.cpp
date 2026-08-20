@@ -31,8 +31,8 @@ extern "C" void fault_print(const char* name, uint32_t error) {
 }
 
 void init_syscalls() {
-  syscalls[SYS_YIELD] = (syscall_t)yield;
-  syscalls[SYS_EXIT] = (syscall_t)exit;
+  syscalls[SYS_YIELD] = (syscall_t)scheduler_entry;
+  syscalls[SYS_EXIT] = (syscall_t)r3_exit;
   syscalls[SYS_WRITE] = (syscall_t)fd_write;
 }
 
@@ -121,19 +121,18 @@ void kernel_main() {
   /* A placeholder TCB representing kernel_main's own execution context, so
    * switching away from it doesn't collide with the first real thread.
    */
-   
   static Thread boot_thread = {};
   boot_thread.next = &boot_thread;
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
 
   thread_create<true>(test_writes);
-  thread_create<false>(kthread1);
   thread_create<true>(test_writes_2);
+  thread_create<false>(kthread1);
   thread_create<true>(test_writes_3);
 
   //leave_critical();
-  exit();    // hand off to the first real thread
+  r0_exit();    // hand off to the first real thread
 
   while (1) {
     asm volatile ("hlt");

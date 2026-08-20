@@ -2,8 +2,9 @@
 
 #include "kernel.hpp"
 
-void yield(void);
+void r0_yield(void);
+extern "C" void r0_exit(void);
 void scheduler(void);
 void dispatch(void);
 
-extern "C" void exit(void);
+void r3_exit(void);
