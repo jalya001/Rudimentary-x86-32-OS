@@ -55,7 +55,17 @@ tcb_t *thread_create(void (*entry_fn)()) {
   *t = {};
   t->tid = tid;
   t->state = READY;
+
   t->kernel_stack = stack_allocator.allocate();
+  if (t->kernel_stack.sp == 0) return 0;  // out of stacks
+
+  if constexpr (User) {
+    t->user_stack = stack_allocator.allocate();
+    if (t-> user_stack.sp == 0) {
+      stack_allocator.free(t->kernel_stack);  // give back what er already took
+      return 0;
+    }
+  }
 
  /* --- thread bootstrap ---
   *
@@ -65,7 +75,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
   * points at a trampoline instead of a real saved code. Field order here
   * mirrors what scheduler_entry itself pushes/pops.
   */
-  uint8_t *top = (uint8_t *)t->kernel_stack.top;
+  uint8_t *top = (uint8_t *)t->kernel_stack.sp;
   top -= sizeof(SwitchFrame);
   auto *frame = (SwitchFrame *)top;
   t->kernel_stack.sp = (uintptr_t)frame;
@@ -77,8 +87,6 @@ tcb_t *thread_create(void (*entry_fn)()) {
   frame->ebx = (uintptr_t)entry_fn; // both trampolines read this
 
   if constexpr (User) {
-    t->user_stack = stack_allocator.allocate();
-
     frame->return_eip = (uint32_t)(uintptr_t)uthread_trampoline;
     frame->esi = (uint32_t)t->user_stack.sp; // uthread_trampoline reads this 
   } else {
@@ -131,9 +139,31 @@ void kernel_main() {
   thread_create<false>(kthread1);
   thread_create<true>(test_writes_3);
 
-  //leave_critical();
+  //thread_create<true>(stress_a);
+  //thread_create<true>(stress_b);
+  
+  fd_write(1, "Stress test starting - let this run for at least 1-2 minutes\n");
+
   r0_exit();    // hand off to the first real thread
 
+  /*
+  thread_create<true>(test_exiter);
+
+  yield(); // hands off to test_exiter — it runs to completion and exits;
+           // this yield() only returns once that's fully happened, since
+           // boot_thread and test_exiter are the only two threads right now
+  yield(); // trivial self-switch (boot_thread alone in the list) — this is
+           // what actually triggers the zombie-reaping check to run
+
+  tcb_t *reused = thread_create<true>(test_after_exit);
+  fd_write(1, reused ? "Reuse check: OK\n" : "Reuse check: FAILED\n");
+
+  int failures = 0;
+  for (int i = 0; i < 10; i++) {
+    if (!thread_create<true>(noop_thread)) failures++;
+  }
+  fd_write(1, failures > 0 ? "Exhaustion check: OK (failed cleanly)\n" : "Exhaustion check: FAILED (should have run out of stacks)\n");
+ */
   while (1) {
     asm volatile ("hlt");
   }
