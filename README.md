@@ -467,6 +467,8 @@ Adding a thread consists of slotting it into an empty space in the TCB table and
 
 TSS esp0 is set during dispatch? so that an interrupt can find the appropriate stack when it is needed
 
+the initial trampoline thread gets its context pushed onto the startup stack, which is fine, because that stack is going to be discarded anyway
+
 ## .x Context switch
 Changing privilege levels has the CPU change to kernel stack for you on x86. Privilege levels are not used for anything else right now?
 
