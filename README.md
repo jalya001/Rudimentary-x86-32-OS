@@ -13,8 +13,8 @@ The OS has the following attributes and properties:
 | BIOS-booted                 | Y | Given x86 typically uses BIOS, this is only natural. |
 | Uniprocessor                | Y | That only one task is running at a time. It does not utilize multiple cores. |
 | Monolithic                  | - | OS services run in the kernel space. |
-| Preemptive Scheduling       | - | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
-| Multitasking                | - | Multiple threads and programs residing in memory at once. |
+| Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
+| Multitasking                | Y | Multiple threads and programs residing in memory at once. |
 | Demand-paged                | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
 | Simplified Unix File System | - | Including inodes. |
 | Simple Privilege Levels     | Y | . |
@@ -41,9 +41,7 @@ Note we compile using GCC. We are using AT&T syntax for assembly which is defaul
 
 Have to compile without thunking so we can control where code is
 
-correct bochs configuration?
-
-TODO: feed dependencies to makefile to avoid getting trolled
+We have provided a bochsrc configuration. To use it, it needs to be placed wherever bochs looks for it.
 
 # 2 Design Overview
 | Section |
@@ -70,9 +68,11 @@ boot/
 kernel/
 ├── kernel.c/h
 ├── kernel.ld
-├── entry.S
+├── entry.S/h
+├── faults.S/h
 ├── interrupt.c/h
 ├── scheduler.c/h
+├── pic.c/h
 ├── synchronization.c/h
 ├── memory.c/h
 ├── mailbox.c/h
@@ -90,6 +90,10 @@ kernel/
     └── screen.c/h
 
 lib/
+├── minstd/
+│   ├── string.c/h
+│   ├── types.c/h
+│   └── utils.c/h    
 ├── syslib.c/h
 ├── utils.c/h
 ├── time.c/h
@@ -331,6 +335,8 @@ Non-reserved EFLAG bits:
 |    19 | VIF  | Virtual Interrupt Flag               | |
 |    20 | VIP  | Virtual Interrupt Pending            | |
 |    21 | ID   | CPUID available                      | |
+
+EFLAGS start the same for r0 and r3 threads
 
 # 5 Protection
 It is useful to have a distinction between different privilege levels for protection purposes, although there is not much to protect in this case. Still, there are many important features built into the CPU that occur upon changing privilege levels, and so for a complete implementation of a simple orthodox OS, it is necessary.
