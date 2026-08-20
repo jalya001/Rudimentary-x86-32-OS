@@ -3,22 +3,17 @@
 #include "scheduler.hpp"
 #include "entry.hpp"
 
-tcb_t *zombie = 0;
-
-static inline void halt() {
-  while (1) {
-    asm volatile("hlt");
-  }
-}
-
 void r0_yield() {
   direct_scheduler_entry();
 }
 
-extern "C" uint32_t save_and_get_next_esp(uint32_t old_esp) {
+uint32_t scheduler(uint32_t old_esp) {
+  static tcb_t *zombie = 0;
+  tcb_t *to_remove;
+  
   current_running->kernel_stack.sp = old_esp;
   
-  /* Reapp whichever thread exited during the *previous* switch. By now
+  /* Reap whichever thread exited during the *previous* switch. By now
    * we're running on a different stack than it was, so its memory is
    * safe to hand back to the allocator. (Freeing it any earlier, e.g.
    * right when it exits, would mean freeing the very stack we're still
@@ -26,16 +21,10 @@ extern "C" uint32_t save_and_get_next_esp(uint32_t old_esp) {
    */
   if (zombie) {
     stack_allocator.free(zombie->kernel_stack);
-    if (zombie->user_stack.base) stack_allocator.free(zombie->user_stack);
+    if (zombie->user_stack.bottom) stack_allocator.free(zombie->user_stack);
     zombie = 0;
   }
-  
-  scheduler();
-  return current_running->kernel_stack.sp;
-}
 
-void scheduler() {
-  tcb_t *to_remove;
   switch (current_running->state) {
     case READY:
       current_running = current_running->next;
@@ -62,7 +51,8 @@ void scheduler() {
   }
   
   current_running->state = READY;
-  tss.esp0 = current_running->kernel_stack.base + STACK_SIZE;
+  tss.esp0 = current_running->kernel_stack.bottom + STACK_SIZE;
+  return current_running->kernel_stack.sp;
 }
 
 void r0_exit() {

@@ -20,7 +20,7 @@ tim_msg:
 .globl uthread_trampoline
 
 .extern syscall_handler
-.extern save_and_get_next_esp
+.extern scheduler
 .extern r0_exit
 
 enter_critical:
@@ -55,7 +55,7 @@ scheduler_entry:
   push %gs
 
   push %esp # should change these not to need passing through the stack at some point
-  call save_and_get_next_esp
+  call scheduler
   add $4, %esp
   mov %eax, %esp
 

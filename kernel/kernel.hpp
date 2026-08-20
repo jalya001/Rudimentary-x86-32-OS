@@ -21,7 +21,7 @@ enum TaskState {
 };
 
 struct Stack {
-  uintptr_t base;
+  uintptr_t bottom;
   uintptr_t sp;
 };
 
@@ -34,8 +34,8 @@ struct StackAllocator {
       if (!(used_mask & (1 << i))) {
         used_mask |= (1 << i);
         Stack stack;
-        stack.base = STACKS_START + i * STACK_SIZE;
-        stack.sp = stack.base + STACK_SIZE;
+        stack.bottom = STACKS_START + i * STACK_SIZE;
+        stack.sp = stack.bottom + STACK_SIZE;
         return stack;
       }
     }
@@ -43,8 +43,8 @@ struct StackAllocator {
   }
 
   void free(Stack stack) {
-    if (stack.base < STACKS_START || stack.base >= STACKS_END) return;  // never allocated by us
-    uint32_t i = (stack.base - STACKS_START) / STACK_SIZE;
+    if (stack.bottom < STACKS_START || stack.bottom >= STACKS_END) return;  // never allocated by us
+    uint32_t i = (stack.bottom - STACKS_START) / STACK_SIZE;
     used_mask &= ~(1 << i);
   }
 };
@@ -96,3 +96,4 @@ struct SwitchFrame {
 };
 
 void fd_write(int fd, const char *msg);
+inline void halt();

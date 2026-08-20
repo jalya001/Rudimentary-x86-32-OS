@@ -12,6 +12,10 @@
 
 extern "C" void kernel_main();
 
+inline void halt() {
+  while (1) asm volatile("hlt");
+}
+
 tcb_t *current_running = 0;
 syscall_t syscalls[256];
 
@@ -164,7 +168,5 @@ void kernel_main() {
   }
   fd_write(1, failures > 0 ? "Exhaustion check: OK (failed cleanly)\n" : "Exhaustion check: FAILED (should have run out of stacks)\n");
  */
-  while (1) {
-    asm volatile ("hlt");
-  }
+  halt();
 }

@@ -4,7 +4,6 @@
 
 void r0_yield(void);
 extern "C" void r0_exit(void);
-void scheduler(void);
-void dispatch(void);
+extern "C" uint32_t scheduler(uint32_t old_esp);
 
 void r3_exit(void);
