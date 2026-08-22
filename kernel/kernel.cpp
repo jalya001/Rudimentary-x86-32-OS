@@ -1,5 +1,6 @@
 #include "drivers/serial.hpp"
 #include "drivers/vga.hpp"
+#include "drivers/ata.hpp"
 #include "kernel.hpp"
 #include "gdt.hpp"
 #include "entry.hpp"
@@ -120,15 +121,34 @@ void kthread1() {
 }
 
 void kernel_main() {
+  int rc = 0;
+  
   init_serial();
   init_vga();
   init_gdt();
   pic_remap();
   init_interrupts();
   init_syscalls();
+  
+  rc = ata_init();
+  if (rc < 0) fd_write(1, "DISK INIT ERROR\n");
 
   serial_print("Hello World.\n");
   vga_write("Hello World\n");
+
+  uint8_t sector[512];
+  rc = ata_read_sector(0, sector);
+  if (rc < 0) fd_write(1, "disk read error\n");
+  kprintf("Test disk read: 0x%x%x = 0x55AA\n", sector[510], sector[511]);
+
+  for (int i = 0; i < 512; i++) sector[i] = ((unsigned char*)"\xDE\xAD\xBE\xEF")[i % 4];
+
+  int TEST_LBA = 31; // this is not a safe spot, change it later
+  rc = ata_write_sector(TEST_LBA, sector);
+  if (rc < 0) fd_write(1, "disk write error\n");
+  rc = ata_read_sector(TEST_LBA, sector);
+  if (rc < 0) fd_write(1, "disk read error\n");
+  kprintf("Test disk write: 0x%x%x = 0xBEEF\n", sector[222], sector[223]);
 
   /* A placeholder TCB representing kernel_main's own execution context, so
    * switching away from it doesn't collide with the first real thread.

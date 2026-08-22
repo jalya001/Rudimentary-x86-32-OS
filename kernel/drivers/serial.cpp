@@ -5,9 +5,19 @@ void outb(unsigned short port, unsigned char val) {
   asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
+void outw(unsigned short port, unsigned short val) {
+  asm volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
+}
+
 unsigned char inb(unsigned short port) {
   unsigned char ret;
   asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+unsigned short inw(unsigned short port) {
+  unsigned short ret;
+  asm volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
   return ret;
 }
 
@@ -81,6 +91,23 @@ extern "C" void kprintf(const char* fmt, ...) {
     case 'd': {
       int value = (int)*args++;
       serial_print(value);
+      break;
+    }
+
+    case 'x': {
+      uint32_t value = *args++;
+      const char* hex = "0123456789ABCDEF";
+      char buffer[9];
+      int i = 8;
+
+      buffer[i] = '\0';
+
+      do {
+        buffer[--i] = hex[value & 0xF];
+        value >>= 4;
+      } while (value != 0);
+
+      serial_print(&buffer[i]);
       break;
     }
 
