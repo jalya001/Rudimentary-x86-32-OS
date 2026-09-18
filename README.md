@@ -9,59 +9,59 @@ The OS has the following features:
 
 | Name                        | Implemented? | Description |
 | --------------------------- | - | --- |
-| BIOS-booting                 | Y | Given x86 typically uses BIOS, this is only natural. |
+| BIOS-booting                | Y | Given x86 typically uses BIOS, this is only natural. |
 | Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
 | Multitasking                | Y | Multiple threads and programs residing in memory at once. |
-| Demand-paging                | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
+| Demand-paging               | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
 | Simplified Unix File System | - | Including inodes. |
 | Simple Privilege Levels     | Y | . |
 | System Call Interface       | Y | We have system calls. |
 | Traditional Synchronization | Y | We have all the synchronization primitives. |
-| Shared buffers and Mailbox IPC | Y | . |
+| Shared buffers              | . | . |
+| Mailbox system              | Y | . |
 | PS/2 Keyboard Driver        | . | very simple |
 | ATA PIO Disk Driver         | Y | very simple |
-| CLI-interface                   | - | . |
+| CLI-interface               | - | . |
 
 And the following attributes:
 
 | Name | Description |
 | --- | --- |
 | x86-based             | Supports x86 processors only. Note x86 is little endian. |
-| General-purpose       | As opposed to a fridge or something. |
-| Orthodox              | Don't be bold, follow the mold. |
+| General-purpose       | As opposed to something fringe like a fridge. |
+| Orthodox              | It is not bold and unique, it follows the mold of UNIX. Still, some breaks with the orthodoxy are observed. |
 | Uniprocessor          | That only one task is running at a time. It does not utilize multiple cores. |
 | Monolithic            | OS services and resources are in the kernel space. |
-| Static Device Drivers | All device drivers are hard-coded into the OS, |
-| Process Isolation     | . |
+| Static Device Drivers | All device drivers are hard-coded into the OS. |
+| Process Isolation     | Processes are meant to not disrupt each other arbitrarily. |
 
 # 1 How to use
 In terms of physical hardware, it is today only legacy machines that are capable of running this, which you are unlikely to have lying around. So we heavily recommend emulating the hardware instead.
 
 ## 1.1 Hardware Requirements
-The CPU needs to be x86 32-bit, obviously
-
-Disk needs to have an ATA interface. Many modern disks lack it, so you probably need an emulation layer.
-
-does not support usb keyboard
+- The CPU needs to be x86 32-bit. Some legacy variants are not supported, (but we have yet to determine which and plan to support them at a later time). Only one core is used.
+- The Disk needs to have an ATA interface. Many modern disks lack it, so you probably need an emulation layer.
+- USB keyboards are not yet supported.
+- Disk space enough to fit the disk image. And it does not expand to fit additional space in its partition.
+- At least (TBD) of RAM.
+- Preferably BIOS boot firmware.
+- VGA-compatible graphics.
+- 8259 PIC.
 
 ## 1.2 Compilation
-explain the makefile we provide
-
-Note we compile using GCC. We are using AT&T syntax for assembly which is default for GAS.
-
-Have to compile without thunking so we can control where code is
+We have provided a makefile that on `make boot` creates a disk image.
+- Compilation tested to work both on Linux and Macintosh.
+- It compiles using GCC.
 
 ## 1.3 From Emulator
-Instuctions on how to set up Bochs for this
-
-With Bochs, use an image as a disk rather than USB?
+Use the compiled image.
 
 We have provided a bochsrc configuration. To use it, it needs to be placed wherever bochs looks for it.
 
 ## 1.4 From USB
-There is no installer to this OS, and it is very difficult to manually transplant an OS into a machine, so we only detail the much simpler booting from a USB device. This however, has the adverse effect of all disk actions having to inefficiently pass through the USB device
+There is no installer to this OS, and it is very difficult to manually transplant an OS into a machine, so we only detail the much simpler booting from a USB device. This however, has the adverse effect of all disk actions having to inefficiently pass through the USB device.
 
-The the image has to be "burned" onto the USB.
+The the image has to be "burned" onto the USB to ensure the image is aligned correctly.
 
 You select the USB as the device to boot from in your machine's bootloader.
 
@@ -148,11 +148,7 @@ user/
 | 1                 | Shell              |
 | Many              | Programs           |
 
-## 2.3 Volatile Memory Layout
-
-| Space | Description |
-| ----- | ----------- |
-| ?     | Kernel Space |
+useless? move to file system talk? programs should be part of the file system
 
 # 3 Startup
 When a CPU using x86 architecture first loads up, it enters its reset state, which is in Real Mode (16bit) with interrupts disabled. It then reads and runs the physical address 0xFFFF0 where the BIOS firmware is. The BIOS then selects a bootable device to jump to.
@@ -671,7 +667,7 @@ exposes page_fault_handler for the interrupt
 ## 5.5 Object Residency
 Objects may be created in different parts of memory. For use with synchronization and IPC objects.
 
-Distinctions of: #1 kernel-level, inaccessible to user processes. #2 protected user-level, userspace stuff with write and sometimes also read access restricted, needing to go through system calls to the kernel for access. #3 unprotected user-level, which has no more pertinent kernel-level checks after being established.
+Distinctions of: #1 kernel-level, inaccessible to user processes. #2 protected user-level, userspace stuff with write and sometimes also read access restricted, needing to go through system calls to the kernel for access. Note this in a way could be seen as breaking the principle of a monolithic kernel. #3 unprotected user-level, which has no more pertinent kernel-level checks after being established.
 
 # 6 Interprocess Communication
 Say a process wants to pass information to another. For that, the first half is the recipient reading the information, which has to either be written inside or outside its memory space, only possibly constituting addresses within a process' userspace and the global kernel space respectively, owing to our implementation of virtual memory only leaving those parts potentially accessible to a process. Mutatis mutandis the sender. These are forms of shared physical memory mappings, that different (or the same, in the case of the kernel) virtual addresses map to the same physical addresses. (Mapping handled by paging. And it keeps it consistent in case of rotations and stuff.)
@@ -731,6 +727,8 @@ mbox_stat
 
 ## 6.6 Dispatchers
 A thing that sends to multiple mailboxes. It is very simple since it simply does that.
+
+maybe should be renamed to mailmen to disambiguate
 
 Interface:
 
