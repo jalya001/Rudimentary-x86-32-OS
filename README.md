@@ -414,28 +414,51 @@ Its base and limit are also based on something else.
 Privilege changing requires interrupt and iret
 
 ### 4.3.2 Permissions
-It is useful to have restrictions on what user execution is allowed to do at any given moment. This is technically per execution context, but for simplicity we implement it per process. The orthodox way of managing this is a lot more complicated, with a different system for each and every thing, which is overkill for our purposes, and we prefer a single system for every permission.
+It is useful to have restrictions on what user execution is allowed to do at any given moment. This is technically per execution context, but for simplicity we implement it per process. The orthodox way of managing this has a different system for every part of the system, which is overcomplicated for our purposes, and we prefer a single system for every runtime permission (whereas the file system still uses its own permission system).
+
+We imagine a permission object that is capable of expressing any arbitrary permission. This means the data of the permission has to be interpreted by the target of the permission, requiring a system of giving objects identifiers.
 
 | Field | Description |
 | --- | --- |
-| Rules | Bitmap of the rules. |
-| OID | Which object it concerns. Immutable. |
-| Data | Is only legible to the target object, to tell what is being permitted. Immutable. |
-| Counter | How many processes are using this permission. When reaching 0, the permission object is freed. |
+| uint8 Kernel Byte | Bitmap of properties solely managed and created by the kernel. Immutable. Few possibilities for now, more to come later perhaps. |
+| uint8 User Byte | Bitmap of properties managed by requests of the user-level processes. |
+| OID OID | Only used for `permission_stat`. |
+| OID Target | Which object it concerns. Immutable. |
+| uint16 Data | Is only legible to the target object, to tell what is being permitted. Immutable. |
+| uint16 Counter | How many processes are using this permission. When reaching 0, the permission object is freed. |
 
-Rules:
+User Byte:
 
 | Bit | Description |
 | --- | --- |
 | access | Allowed to use the thing. Generally always set to 1. Set to 0 to temporarily disable the permission. |
-| admin | Mote destroy and in-place modify the permission rules. |
+| admin | Mote destroy and in-place modify the User Byte. |
 | revoke | Mote revoke access to the permission. Even from itself and others with revoke rights. Non-admins mote not revoke admins. |
 | copy_reference | Mote pass infinitely many pointer permissions to itself. |
 | copy_new | Mote make new permissions with as many rights as it has. It is not possible to revoke these effectively after dispension. |
 
-All bits start at 1.
+Kernel Byte:
 
-Permission objects are stored kernel-level. Permission object pointers are stored in protected user-level memory. Protected, because the kernel does not store the identity of the processes. The pointers are in a protected hashmap which uses the OID concatonated with data as key. Hashmap, because there is no other good datastructure for sparse indexable lists.
+| Value | Name | Description |
+| --- | --- | --- |
+| 1 | Owner | Allows arbitrary creation of permissions of the target and modifications on the target if the target is a permission. |
+
+As for how the system is stored... Naturally, to make the system unforgable, the permission objects should be in kernel memory, since there is no other way to know the protected user-level entry is specifically a permission. Indexing the permission objects in a process goes through a kernel-level protected dynamic hashmap for each process, using the OID concatonated with Kernel Byte, and Data as key (of same length each time), because they are all immutable and together unique. Hashmap, because there is no other good datastructure for sparse indexable lists. (In principle at least, but since hashmaps are not implemented here yet, we simply use a linked list for now.)
+
+As for how a permission's lifecycle... First, when you create an object that uses permissions (such objects are both given by the kernel, like IPC objects, and custom user objects (TBD)), the process it was created under gets an Owner permission. You then usually want to use `permission_create` to create a more restricted permission to share with `permission_send`, which the receiving process has a thread using `permission_receive` to receive. When a process with permissions dies, the kernel is supposed to figure it out and decrement the counter of each permission. And note IDs use generations.
+
+Interface:
+
+| Name | Descrption |
+| --- | --- |
+| `permission_create(OID, user_rules, data)` | Create an arbitrary permission of a permission. Tests if the unique key of OID and Data are already in the kernel. This also creates a corresponding owner permission for the created permission. |
+| `permission_destroy(OID, data)` |  |
+| `permission_ownperm(OID)` | Obtain an ownership permission of an object. Only possible on permission objects that have the admin bit enabled. |
+| `permission_send(pid)` | . |
+| `permission_receive(pid)` | . |
+| `permission_stat()` | Return the permission's data. Since it is not possible to read. Used for verifying you have the wanted permission. |
+
+Perfectly finegrained permissions like granular revocability and finetuned handling of orphans would require expensive delegation trees. That is avoided in the orthodoxy, since you have to walk the entire tree back to start each time, which is potentially a massive cost. We do not keep any such things, meaning deep copied permissions are not revokable.
 
 ## 4.4 Interrupts
 Interrupts can be classified into three categories: #1 Hardware interrupts are generated by hardware independent of what is being run in the OS. The most important to configure, the IRQs, go through the PIC (Programmable Interrupt Controller) and then to the CPU. #2 Software interrupts are called from software in the OS using the interrupt instruction INT. #3 CPU exceptions are generated by the CPU upon encountering specific situations. All three then get directed to their IDT entries in the CPU which is used to jump to the respective handlers. The CPU disables interrupts upon doing so and enters ring 0.
