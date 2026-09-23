@@ -281,15 +281,15 @@ Processes are allocated in a fixed size pool of control blocks for simplicity.
 
 Process Control Block:
 
-| Field           | Purpose                                      |
-| --------------- | -------------------------------------------- |
-| `pid`           | Unique process identifier.                   |
-| `state`         | READY, RUNNING, EXITED, BLOCKED.             |
-| `next`          | Next PCB.                                    |
-| `prev`          | Previous PCB.                                |
-| `parent`        | . |
-| `threads`       | Owned threads.                               |
-| `processes`     | Owned processes. |
+| Field           | Type  |Purpose                                      |
+| --------------- | ----- | -------------------------------------------- |
+| `PID`           | Generational ID | Unique process identifier.                   |
+| `state`         | . | READY, RUNNING, EXITED, BLOCKED.             |
+| `next`          | . | Next PCB.                                    |
+| `prev`          | . | Previous PCB.                                |
+| `parent`        | . | . |
+| `threads`       | . | Owned threads.                               |
+| `processes`     | . | Owned processes. |
 
 Interface:
 
@@ -305,12 +305,12 @@ Threads are also allocated in a fixed size pool of blocks for simplicity.
 
 Thread Control Block:
 
-| Field            | Purpose                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| `tid`            | Unique thread identifier.                                         |
-| `state`          | Current thread state (Ready, Running, Blocked, Terminated, etc.). |
-| `kernel_stack`   | Addresses of the thread's kernel-mode stack. For context switches, there is easily an arbitrary amount of information to restore, the TCB, being a fixed size, is unable to contain all necessary information itself, and needs a stack. |
-| `user_stack`     | Addresses of the thread's user-mode stack (if applicable). For resumption of usermode execution.     |
+| Field            | Type  | Purpose                                                           |
+| ---------------- | ----- |----------------------------------------------------------------- |
+| `TID`            | Generational ID | Unique thread identifier.                                         |
+| `state`          | . | Current thread state (Ready, Running, Blocked, Terminated, etc.). |
+| `kernel_stack`   | . | Addresses of the thread's kernel-mode stack. For context switches, there is easily an arbitrary amount of information to restore, the TCB, being a fixed size, is unable to contain all necessary information itself, and needs a stack. |
+| `user_stack`     | . | Addresses of the thread's user-mode stack (if applicable). For resumption of usermode execution.     |
 
 Interface:
 
@@ -418,47 +418,52 @@ It is useful to have restrictions on what user execution is allowed to do at any
 
 We imagine a permission object that is capable of expressing any arbitrary permission. This means the data of the permission has to be interpreted by the target of the permission, requiring a system of giving objects identifiers.
 
-| Field | Description |
-| --- | --- |
-| uint8 Kernel Byte | Bitmap of properties solely managed and created by the kernel. Immutable. Few possibilities for now, more to come later perhaps. |
-| uint8 User Byte | Bitmap of properties managed by requests of the user-level processes. |
-| OID OID | Only used for `permission_stat`. |
-| OID Target | Which object it concerns. Immutable. |
-| uint16 Data | Is only legible to the target object, to tell what is being permitted. Immutable. |
-| uint16 Counter | How many processes are using this permission. When reaching 0, the permission object is freed. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `properties` | Bitmap[8] | Properties managed by requests of the user-level processes. |
+| `this_OID` | Generational ID | Only used for `permission_get`. or is it avoidable to have this? |
+| `target_OID` | Generational ID | Which object it concerns. Immutable. |
+| `data` | uint16 | Only the 15 lowest bits are accessible to user manipulation. Is only legible to the target object, to tell what is being permitted. Immutable. |
+| `counter` | uint16 | How many processes are using this permission. When reaching 0, the permission object is freed. |
 
-User Byte:
+Properties bitmap:
 
 | Bit | Description |
 | --- | --- |
-| access | Allowed to use the thing. Generally always set to 1. Set to 0 to temporarily disable the permission. |
-| admin | Mote destroy and in-place modify the User Byte. |
-| revoke | Mote revoke access to the permission. Even from itself and others with revoke rights. Non-admins mote not revoke admins. |
-| copy_reference | Mote pass infinitely many pointer permissions to itself. |
-| copy_new | Mote make new permissions with as many rights as it has. It is not possible to revoke these effectively after dispension. |
+| `access` | Mote use the thing. Generally always set to 1. Set to 0 to temporarily disable the permission. |
+| `admin` | Mote in-place modify the User Byte. |
+| `revoke` | Mote revoke access to the permission. Even from itself and others with revoke rights. Non-admins mote not revoke admins. |
+| `copy_ref` | Mote pass infinitely many pointer permissions to itself. |
+| `copy_new` | Mote make new permissions with as many rights as it has. It is not possible to revoke these effectively after dispension. |
 
-Kernel Byte:
+If Data's highest bit is set to 1, it is a kernel-managed value. The remaining value then has the following meanings:
 
 | Value | Name | Description |
 | --- | --- | --- |
-| 1 | Owner | Allows arbitrary creation of permissions of the target and modifications on the target if the target is a permission. |
+| 0 | Owner | Allows arbitrary creation of permissions of the target and modifications on the target if the target is a permission. |
 
-As for how the system is stored... Naturally, to make the system unforgable, the permission objects should be in kernel memory, since there is no other way to know the protected user-level entry is specifically a permission. Indexing the permission objects in a process goes through a kernel-level protected dynamic hashmap for each process, using the OID concatonated with Kernel Byte, and Data as key (of same length each time), because they are all immutable and together unique. Hashmap, because there is no other good datastructure for sparse indexable lists. (In principle at least, but since hashmaps are not implemented here yet, we simply use a linked list for now.)
+As for how the system is stored... Naturally, to make the system unforgable, the permission objects should be in kernel memory, since there is no other way to know the protected user-level entry is specifically a permission. Indexing the permission objects in a process goes through a kernel-level protected dynamic hashmap for each process, using `target_OID` concatonated with `data` as key (of same length each time), because they are all immutable and together semi-unique. They are not fully unique, which is why the hashmap has to point to a list of permission objects sharing the same `target_OID` and `data`. Each entry in that list then points to a shared stow of permission objects where each permission object may be pointed at by multiple processes. Hashmap, because there is no other good datastructure for sparse indexable lists. (In principle at least, but since hashmaps are not implemented here yet, we simply use a linked list for now (and since memory is not yet implemented, we have to use a fixed size list for now).)
 
-As for how a permission's lifecycle... First, when you create an object that uses permissions (such objects are both given by the kernel, like IPC objects, and custom user objects (TBD)), the process it was created under gets an Owner permission. You then usually want to use `permission_create` to create a more restricted permission to share with `permission_send`, which the receiving process has a thread using `permission_receive` to receive. When a process with permissions dies, the kernel is supposed to figure it out and decrement the counter of each permission. And note IDs use generations.
+As for how a permission's lifecycle... First, when you create an object that uses permissions (such objects are both given by the kernel, like IPC objects, and custom user objects (TBD)). You then use `permission_get(OID, 0x10...)` to obtain its owner permission that was created alongside it. Which then allows you to use `permission_create` to create a more restricted permission to share with `permission_send`, which the receiving process has a thread using `permission_receive` to receive. When a process with permissions dies, the kernel loops through its permission pointers to decrement the counter of each opened permission. Running processes are themselves responsible for closing permissions they no longer use. Note that the initial owner permission has to be explicitly closed by the process once it closes the object it governs.
 
 Interface:
 
 | Name | Descrption |
 | --- | --- |
-| `permission_create(OID, user_rules, data)` | Create an arbitrary permission of a permission. Tests if the unique key of OID and Data are already in the kernel. This also creates a corresponding owner permission for the created permission. |
-| `permission_destroy(OID, data)` |  |
-| `permission_ownperm(OID)` | Obtain an ownership permission of an object. Only possible on permission objects that have the admin bit enabled. |
-| `permission_send(pid)` | . |
-| `permission_receive(pid)` | . |
-| `permission_stat()` | Return the permission's data. Since it is not possible to read. Used for verifying you have the wanted permission. |
+| `permission_create(target_OID, properties, data)` | Create an arbitrary permission of a permission. This also creates a corresponding owner permission for the created permission. May create deep duplicates. |
+| `permission_close(perm_OID)` | Closes the calling process' holding of a permission. |
+| `permission_revoke(PID, perm_OID)` | Revokes the permission of a specific process. Checks if the calling process has the authority to revoke it. |
+| `permission_modify(perm_OID, properties)` | There is no "permission_destroy" because a permission is only safely invalidated by modifying the access bit to 0 (without a massive search operation), after which, all processes using it have to themselves close the permission. |
+| `permission_ownperm(perm_OID)` | Obtain an ownership permission of a permission object. Only possible on permission objects that have the admin bit enabled. |
+| `permission_send_ref(PID, perm_OID)` | . |
+| `permission_send_dcopy(PID, perm_OID)` | . |
+| `permission_receive(PID)` | . |
+| `permission_get(target_OID, data)` | Returns the list of permissions that have the same target_OID and data. |
+| `permission_stat(perm_OID)` | Takes a permission OID of the calling process. Return the permission's data. Since it is not possible to read. Used for verifying you have the wanted permission. |
 
-Perfectly finegrained permissions like granular revocability and finetuned handling of orphans would require expensive delegation trees. That is avoided in the orthodoxy, since you have to walk the entire tree back to start each time, which is potentially a massive cost. We do not keep any such things, meaning deep copied permissions are not revokable.
+Note many of these operations need to lock the permission while they are being done.
+
+Perfectly finegrained permissions like granular revocability and implicit handling of orphans would require expensive delegation trees. That is avoided in the orthodoxy, since you have to walk the entire tree back to start each time you want to use a permission, which is potentially a massive cost. We do not keep any such things, meaning deep copied permissions are not revokable.
 
 ## 4.4 Interrupts
 Interrupts can be classified into three categories: #1 Hardware interrupts are generated by hardware independent of what is being run in the OS. The most important to configure, the IRQs, go through the PIC (Programmable Interrupt Controller) and then to the CPU. #2 Software interrupts are called from software in the OS using the interrupt instruction INT. #3 CPU exceptions are generated by the CPU upon encountering specific situations. All three then get directed to their IDT entries in the CPU which is used to jump to the respective handlers. The CPU disables interrupts upon doing so and enters ring 0.
