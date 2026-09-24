@@ -1,9 +1,7 @@
 # Rudimentary x86-32 OS
 An operating system built to serve as a showcase of simplified orthodox design. It has been tested on an i586 processor emulated via Bochs 2.8.
 
-Note it is heavily Work-In-Progress. This includes both the code and the below text.
-
-For architecturally unimportant details, see the code itself, which is annotated.
+For details not concerning the architecture, see the code itself, which is annotated.
 
 The OS has the following features:
 
@@ -14,11 +12,12 @@ The OS has the following features:
 | Multitasking                | Y | Multiple threads and programs residing in memory at once. |
 | Demand-paging               | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
 | Simplified Unix File System | - | Including inodes. |
-| Simple Privilege Levels     | Y | . |
+| Privilege Levels            | Y | . |
+| Permissions                 | . | . |
 | System Call Interface       | Y | We have system calls. |
-| Traditional Synchronization | Y | We have all the synchronization primitives. |
+| Traditional Synchronization | Y | We have all the usual synchronization primitives. |
 | Shared buffers              | . | . |
-| Mailbox system              | Y | . |
+| Mailboxes                   | Y | . |
 | PS/2 Keyboard Driver        | . | very simple |
 | ATA PIO Disk Driver         | Y | very simple |
 | CLI-interface               | - | . |
@@ -29,11 +28,12 @@ And the following attributes:
 | --- | --- |
 | x86-based             | Supports x86 processors only. Note x86 is little endian. |
 | General-purpose       | As opposed to something fringe like a fridge. |
-| Orthodox              | It is not bold and unique, it follows the mold of UNIX. Still, some breaks with the orthodoxy are observed. |
+| Orthodox              | It is not bold and unique, it follows the mold of UNIX. Still, some breaks with the orthodoxy are observed. Breaks are stated in the design document. |
 | Uniprocessor          | That only one task is running at a time. It does not utilize multiple cores. |
 | Monolithic            | OS services and resources are in the kernel space. |
 | Static Device Drivers | All device drivers are hard-coded into the OS. |
 | Process Isolation     | Processes are meant to not disrupt each other arbitrarily. |
+| Indefinite Runtime    | The OS is supposed to be able to run forever without needing to reboot. |
 
 # 1 How to use
 In terms of physical hardware, it is today only legacy machines that are capable of running this, which you are unlikely to have lying around. So we heavily recommend emulating the hardware instead.
@@ -283,7 +283,7 @@ Process Control Block:
 
 | Field           | Type  |Purpose                                      |
 | --------------- | ----- | -------------------------------------------- |
-| `PID`           | Generational ID | Unique process identifier.                   |
+| `PID`           | ID | Unique process identifier.                   |
 | `state`         | . | READY, RUNNING, EXITED, BLOCKED.             |
 | `next`          | . | Next PCB.                                    |
 | `prev`          | . | Previous PCB.                                |
@@ -307,7 +307,7 @@ Thread Control Block:
 
 | Field            | Type  | Purpose                                                           |
 | ---------------- | ----- |----------------------------------------------------------------- |
-| `TID`            | Generational ID | Unique thread identifier.                                         |
+| `TID`            | ID | Unique thread identifier.                                         |
 | `state`          | . | Current thread state (Ready, Running, Blocked, Terminated, etc.). |
 | `kernel_stack`   | . | Addresses of the thread's kernel-mode stack. For context switches, there is easily an arbitrary amount of information to restore, the TCB, being a fixed size, is unable to contain all necessary information itself, and needs a stack. |
 | `user_stack`     | . | Addresses of the thread's user-mode stack (if applicable). For resumption of usermode execution.     |
@@ -421,10 +421,11 @@ We imagine a permission object that is capable of expressing any arbitrary permi
 | Field | Type | Description |
 | --- | --- | --- |
 | `properties` | Bitmap[8] | Properties managed by requests of the user-level processes. |
-| `this_OID` | Generational ID | Only used for `permission_get`. or is it avoidable to have this? |
-| `target_OID` | Generational ID | Which object it concerns. Immutable. |
+| `this_OID` | ID | Only used for `permission_get`. or is it avoidable to have this? |
+| `target_OID` | ID | Which object it concerns. Immutable. |
 | `data` | uint16 | Only the 15 lowest bits are accessible to user manipulation. Is only legible to the target object, to tell what is being permitted. Immutable. |
 | `counter` | uint16 | How many processes are using this permission. When reaching 0, the permission object is freed. |
+| `lock` | lock | . |
 
 Properties bitmap:
 
@@ -450,7 +451,7 @@ Interface:
 
 | Name | Descrption |
 | --- | --- |
-| `permission_create(target_OID, properties, data)` | Create an arbitrary permission of a permission. This also creates a corresponding owner permission for the created permission. May create deep duplicates. |
+| `permission_create(target_OID, properties, data)` | Create an arbitrary permission of a permission. This also creates a corresponding owner permission for the created permission, belonging to the same creating process. May create deep duplicates. |
 | `permission_close(perm_OID)` | Closes the calling process' holding of a permission. |
 | `permission_revoke(PID, perm_OID)` | Revokes the permission of a specific process. Checks if the calling process has the authority to revoke it. |
 | `permission_modify(perm_OID, properties)` | There is no "permission_destroy" because a permission is only safely invalidated by modifying the access bit to 0 (without a massive search operation), after which, all processes using it have to themselves close the permission. |
@@ -697,10 +698,35 @@ exposes page_fault_handler for the interrupt
 
 ### 5.4.5 Initialization
 
-## 5.5 Object Residency
+# 6 Inbuilt Objects
+idk whether this should be a section
+
+## 6.1 Object Residency
 Objects may be created in different parts of memory. For use with synchronization and IPC objects.
 
 Distinctions of: #1 kernel-level, inaccessible to user processes. #2 protected user-level, userspace stuff with write and theoretically also read access restricted, needing to go through system calls to the kernel for access. However, restricting only read access for user processes is not supported by the paging entries, and so would require additional overhead and potentially cache invalidation at some stages, which we deemed not worth having. Note this in a way could be seen as breaking the principle of a monolithic kernel. #3 unprotected user-level, which has no more pertinent kernel-level checks after being established.
+
+## 6.2 ID System
+The system needs unique unforgable IDs. These are naturally kept track of by the kernel. Each set of IDs are a hashmap because we imagine they are sparse. Keeping track of which IDs are in use is done through a bitmap.
+
+In running forever, because the pool of IDs is not infinite, it has to wrap eventually. But this presents the problem of something still referring to an old ID that has been recycled. One idea to address that is a generational ID system. But in running forever, the generations have to wrap eventually too, which is unsafe, since there is no guarantee the elder generations are no longer in use. The orthodox approach instead keeps track of how many references an ID has, and only allows the ID to be reused once there are no more references to it. This is our chosen approach too.
+
+ID data have the following fields:
+
+| Field | Description |
+| --- | --- |
+| count | How many active references. The ID is cleared when references drop to 0. |
+| lock | Because multiple threads could be modifying the counter at once. |
+
+You make a new ID Allocator for each set of IDs. It has the following interface:
+
+| Function | Description |
+| --- | --- |
+| next() | Open and return the next free ID. |
+| open(ID) | Open an ID. |
+| close(ID) | Closes an ID. |
+
+All IDs opened by a process are closed when the process shuts down.
 
 # 6 Interprocess Communication
 Say a process wants to pass information to another. For that, the first half is the recipient reading the information, which has to either be written inside or outside its memory space, only possibly constituting addresses within a process' userspace and the global kernel space respectively, owing to our implementation of virtual memory only leaving those parts potentially accessible to a process. Mutatis mutandis the sender. These are forms of shared physical memory mappings, that different (or the same, in the case of the kernel) virtual addresses map to the same physical addresses. (Mapping handled by paging. And it keeps it consistent in case of rotations and stuff.)
@@ -722,7 +748,7 @@ In models where two arbitrary processes are not allowed to IPC, then handles wou
 ## 6.3 Atomicity
 IPC objects have to ensure atomicity. Make use of synchronization stuff and atomic CPU operations for that
 
-## 6.4 Shared Buffers
+## 6.4 Shared Buffer
 Technically all buffers are shared buffers, but the only implementation we have is unprotected user-level shared buffers.
 
 Shared memory contiguous in virtual space. Is only usefully distinct as a user-level IPC object. 
@@ -735,7 +761,7 @@ sbuffer_open: creates if not created
 
 sbuffer_close
 
-## 6.5 Mailboxes
+## 6.5 Mailbox
 aka. message queue
 
 Can be implemented on top of a shared buffer at any level technically
@@ -758,10 +784,8 @@ mbox_recv
 
 mbox_stat 
 
-## 6.6 Dispatchers
+## 6.6 Mailman
 A thing that sends to multiple mailboxes. It is very simple since it simply does that.
-
-maybe should be renamed to mailmen to disambiguate
 
 Interface:
 
@@ -1150,6 +1174,9 @@ we choose to manually implement some c stl stuff out of minimalism?
 - Tool Interface Standard (TIS) Executable and Linking Format (ELF) Specification.
 - https://wiki.osdev.org/ATA_PIO_Mode
 
+
+ID system
+https://github.com/torvalds/linux/blob/master/include/linux/pid.h
 
 unix documentation and wiki osdev for sources
 
