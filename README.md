@@ -11,7 +11,7 @@ The OS has the following features:
 | Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
 | Multitasking                | Y | Multiple threads and programs residing in memory at once. |
 | Demand-paging               | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
-| Simplified Unix File System | - | Including inodes. |
+| Simplified UNIX File System | - | Including inodes. |
 | Privilege Levels            | Y | . |
 | Permissions                 | . | . |
 | System Call Interface       | Y | We have system calls. |
@@ -33,7 +33,8 @@ And the following attributes:
 | Monolithic            | OS services and resources are in the kernel space. |
 | Static Device Drivers | All device drivers are hard-coded into the OS. |
 | Process Isolation     | Processes are meant to not disrupt each other arbitrarily. |
-| Indefinite Runtime    | The OS is supposed to be able to run forever without needing to reboot. |
+| Indefinite Runtime    | The OS is supposed to be able to run forever without needing to reboot. Likewise, it is not supposed to degrade theoretically in any way despite having run for a long time. |
+| Freestanding          | Not reliant on standard library and stuff. |
 
 # 1 How to use
 In terms of physical hardware, it is today only legacy machines that are capable of running this, which you are unlikely to have lying around. So we heavily recommend emulating the hardware instead.
@@ -354,6 +355,9 @@ Non-reserved EFLAG bits:
 
 EFLAGS start the same for r0 and r3 threads
 
+### 4.2.2 Stacks
+why do we have stacks beyond hardware demands?
+
 ## 4.3 Execution Context
 In monolithic kernels, this is in ensuring user level stuff does not hurt kernel level stuff. Although some have argued this is bad, and that the kernel should also be protected from drivers. But we have too few drivers to care.
 
@@ -622,55 +626,100 @@ barrier_init(barrier_t)
 barrier_wait(barrier_t)
 
 # 5 Volatile Memory Management
-An OS wants some information to be able to persist in some form readily accessible for the processor.
+An OS wants some information to be able to persist in some form readily accessible for the processor. Hardware has the RAM for this, which provides a space of 32-bit addresses, maximally reaching every possible number that 32-bits may represent. Each address maps to an arbitrary byte of data.
 
-That has already been done in loading the kernel code/data for instance, residing in one part of the RAM, which owing to how it is only used internally, with all other uses specially configured, it can be treated like a static block, a distinct area of managed memory, because it is not managed. Likewise, there are potentially some hardware-reserved regions, but they do not need to be interacted with by the OS, and so are also not managed. Both these cases do not require elaborate memory management.
+The kernel code/data has already been loaded into memory, which owing to how it is only used internally, with all other uses specially configured, it can be treated like a static block, a distinct area of managed memory, because it is not managed (much). Likewise, there are potentially some hardware-reserved regions, but they do not need to be interacted with by the OS, and so are also not managed. Both these cases do not require elaborate memory management.
 
-The remaining area is used for dynamic allocations by the kernel and allocations of and by user processes. The latter owing to us following a conventional process model. This is the managed area of memory.
+The remaining area is used for further allocations by the kernel, and of and by user processes. The latter owing to us following a conventional process model. This is the managed area of memory.
 
-## 5.1 Address Space Management
-When tasks use memory, there should be a way for them not to collide with each other's regions, and also avoid extending into unintended areas like the kernel. Leaving that to each task to self-regulate is unacceptable when tasks are supposed to never interfere with each other, which crosses out local protocols in favor of centralized management. And so it is conceived of that each process is allocated address space(s), and that there is a registry keeping track of permissions and so on for these spaces or parts of them.
+## 5.1 Runtime Allocations
+When tasks are running and they want to write something in the finite address space of the RAM... Were the OS deterministic in terms of runtimes, the exact locations where to write could be preplanned. Ack, a general-purpose OS is not, and so it is impossible to predict what resources are needed. This means that alongside static allocation, used for predetermined use, there is undetermined use, which needs runtime allocations (dynamic allocation).
 
-That alone is sufficient, but not complete in terms of capturing boilerplate. Processes need to keep track of what parts of memory they manage, which is complicated when allocated space is not reliably contiguous, or alternatively parts of memory are not allowed to be divided, and large caves are left unfilled. Also that moving address chunks around would require complicated signaling.
+If the undetermined tasks themselves choose where to write in memory, it is impossible for them to consistently discern whether a part of memory is in use, since the contents of the memory are not reliable indicators. It is therefore necessary to keep authoritative records on what address space is occupied, with functions for allocating and deallocating address space for items. These records are in monolithic OS kept in a kernel-level data-structure, rather than protected user-memory.
 
-The solution to that is per-process virtual memory. Virtual memory is a mapping of virtual addresses to eventual physical ones, allowing a structure to be represented contiguously in virtual memory despite no corresponding or fragmented physical presence. It is "per process" since though a single pool allows easy movement and incontiguity of physical parts, it has far greater fragmentation risk, owing to the lesser flexibility and the sheer amount of addresses being fewer.
+Were the address space infinite, the record could simply be an incrementing pointer for each allocation, alas no. Addresses need to be reused. There are many ways of doing so, but all ways optimal, that is in (conceptually) instant allocation and deallocation when an address is needed or forgiven, are conceptually based on the primitive of a list of resources and whether each is occupied (and the ability to locate free resources to distribute and free any arbitrary resource), which we will call a pool. The canonical pool here has contiguous regions of the same value are treated as single blocks (canonically called a heap), although this is an implementation detail.
 
-Yet, there remains much fragmentation risk. Virtual addresses are not easily relocable because there is no in-built mechanism for managing all pointers in case of movements. That inevitably hinders large contiguous allocations, usually so during long sessions, and there is no perfect solution for it. There are known measures which can be taken to reduce the likelihood of especially bad fragmentation patterns, but not are not much taken here. Note part of the motivation for why 32-bit was largely superceded by 64-bit was to increase the address space as to make the especially bad fragmentation patterns less likely.
+Interface:
 
-A next complication is that we are also following a model of separate ring 0 and ring 3 privilege levels, raising the question of whether in per-process the content for the two levels should be in separate virtual spaces. The orthodox answer to this is no, splitting the dynamic space in two, one part for the kernel only, present in every process. The advantage is to avoid invalidating the TLB each time privileges switch by referencing what is already there, as opposed to having to reload it every time. With the disadvantage of reducing the amount of potential addresses for both kernel and processes, increasing fragmentation risks.
+| Function | Description |
+| --- | --- |
+| `malloc` | Commits some virtual memory. |
+| `calloc` | Same as `malloc`, except it zeroes out the allocated memory, which needs instantly committing to physical. |
+| `free` | Is only able to free whole allocations, not partially. It is called from a process (or kernel). It releases the pool allocation in the process, and for all pages that end up unused by the process resultingly are marked available, and the physical frames mapped have their reference counters decremented. They use reference counters because of frame sharing. When at 0, a physical frame is marked available. |
+| `resize` | Because tasks do not always know at allocationtime how big the allocation needs to be, and "better safe than sorry" or any other naive approach is not theoretically sufficient. Conceptually equivalent to malloc and moving. But in implementation, it first checks whether it is extendable in-place (behavior not replicable by malloc alone). If not, it destroys the buffer and makes a new one somewhere else with the same content and bigger. |
 
-There is an internal functions for allocating user address space. And the kernel exposes a system call for allocating and deallocating user space memory each.
+Notes:
+- All these functions have respective kernel-level variants.
+- Each function manages bytes (so the pools manage bytes as well). If the unit of memory they concern is bigger than a byte, the unit should be able to take multiple allocations.
 
-// missing more discussion on TLB
+## 5.2 Allocation Management
+Under a model of isolated processes, access of allocated memory is per process, and full isolation of memory between processes, that they are unable to arbitrarily interfere with other's memory, is needed. To achieve that, units of addresses (frames) need to at least conceptually have owners (where in practice ownership is often implicit, and sometimes more like a marker of occupation). Which means allocation is in essence only the setting of ownership, along with possibly other metadata, for that frame. (Note that because you only set metadata, allocation is innately "lazy", as other work may be done later on demand.)
 
-## 5.2 Swapping
-A side-effect of virtual memory is that the virtual address space could be extended to use disk space as further memory. Which has to be managed such that data in disk but not in memory needs to be loaded into memory, swapping something back into disk in exchange (unless it is no longer needed).
+Yore was this done by "base and bound", that each process had one frame as an arbitrarily sized contiguous range of addresses. That was obviously vulnerable to fragment obstruction without further though. Which is why we can conceive of mutations like a process owning multiple regions of addresses.
 
-Swapping generally slows performance somewhat. The greatest non-I/O cost of swapping is perhaps in handling missing data (page faults), in that they also are interrupts (with all their associated overhead).
+However, that could theoretically lead to a worst-case of half of the memory being wasted metadata for different processes owning a bunch of single bytes. Which is why it makes sense to give each frame a decently large minimum size. That inevitably does lead to waste if say a process does not need the entire unit, but is still marked as its sole owner. Likewise, having to explicitly store the bound of each unit is also wasteful, and could be avoided by having each unit be fixed size.
 
-And it is also noteworthy disk operations are magnitudes slower than volatile memory ones, which slows down. That can lead to thrashing, which is when most execution resources are spent on moving data in and out of memory because useful data is constantly being swapped in and out due to lacking RAM. Meaning the primary use-case for swapping is for rarely used data.
+### 5.2.1 Internal Fragmentation
+Yet giving a minimum size is wasteful as well, because of the potential for unused gaps within allocations (internal fragmentation). For gaps inside allocations are inevitable when the granularity of the smallest usable unit in runtime is smaller than the smallest managed on in memory, increasing in likelihood with greater disparity. And waste may only be theoretically minimal beyond the "smallest managed unit of memory". The orthodoxy compromises at 4-KiB frames.
 
-Swapping is also usable as emergency persistent storage, but that is not ever used here.
+With each frame having an owner, there is no reason why a frame of the same owner should not be able to have multiple allocations inside it, even if the allocation ends up split across multiple pages. So the address pool should record empty space in general, rather than only which frames are owned, such that it can fill these gaps. The worst case however, yet remains the possibility of many processes owning a mostly empty frame each. This is considered an acceptable flaw, probably owing to how spamming `malloc(FRAME_SIZE)` is intuitively going to cause problems, spamming the creation of new processes is likewise, making them hard to misuse, in a way.
 
-## 5.3 Undetermined Use
-Another query one may raise about memory use in general is how "undetermined use" is managed (note it is not a standard term). It refers to how it sometimes is impossible to predict how much memory a task is going to consume. In contrast to predetermined use, where you can cleanly allocate a slot of fixed size somewhere to cover the use without wasting space and without having to expand it later.
+Another bad scenario is where a process requests a full frame, then deallocates everything except the first and last byte in it. And repeats this pattern, until every frame is occupied, but only by two bytes each, which is waste in big frames. This is not considered acceptable, since patterns like these are easy to accidentally make, and work as degradations over time.
 
-The naive solution to undetermined use, the "better safe than sorry approach" of generously endowing each instance of undetermined use, quickly becomes a massive waste of space, and a demand-based approach is necessary for any serious management. For that, a typical approach involves memory structures capable of reserving space without physically occupying it, lazy-allocation. That is done by committing virtual addresses for something without committing corresponding physical ones.
+The solution is disallowing partial frees. Without partial frees, you have to allocate the whole frame, then deallocate the whole frame, and then separately allocate those last two bytes for the same semantics, where the last allocation means it has to go through the allocator, which will neatly fit them, rather than let them occupy locations of their own choosing. This is perhaps why the orthodoxy does not see supporting partial frees as a worthy endeavor.
 
-The typical way of organizing that for each dynamic space is by a pool shared among many heaps (or only one for kernel). When one of these heaps wants to allocate, it walks its holding of blocks of its virtual space to find a contiguous space, splits the block upon selection, and then it requests memory for that from the pool, conceptually. This is further granulizable by lazy-allocating with the heap allocations, such that no memory is committed until actually written. In our case, either of #1 pools, allocated like that by `malloc`, whereas `calloc` does write it. And #2 stacks, not committing memory until the stack pointer reaches the frontier. Stacks are only created for threads, done so upon initializing them. There are not any clear weaknesses of this system, so there is no reason not to use it.
+Still, there remains a scenario where you first make a bunch of 1 byte allocations, and then free every allocation while keeping 1 byte on every frame. There is no preventing this, but this is much harder to do accidentally, since it would require allocating everything at once (which is unlikely), and is an instant degradation (which is easier to discover), as opposed to degradation over a long time with a passive loop. And is so considered acceptable.
 
-In UNIX there are more contours, say with a distinct main stack capable of resizing, but none of that is implemented here.
+### 5.2.2 External Fragmentation
+Programs sometimes want contiguous allocations, and when these are naively represented contiguously in memory as well... If one or more allocations occupy unfortunate spots, a large contiguous allocation that has enough total space to be allocated, but finds no contiguous block to be allocated in, fails to be allocated, thus failing to fit. In mind of which, theoretically maximal fit between allocations (the minimization of problems of "external fragmentation") is a virture, and one that does appear to be a strict requirement of the orthodoxy.
 
-## 5.4 Paging
-And as for implementations of virtual memory, the most relevant one is paging. Hardware also supports segmentation, but standard setups consist of obsoleting it like is done here. Heterodox implementations are rarely worth it due to lacking hardware support involving much more overhead.
+Why so is not obvious, especially since solving it would require measures that are costly for performance. Most likely, it is for perpetuity. Initially, addresses are dealt out from the pool in sequence. However, after most of the total space has been occupied at some point, and as addresses begin getting freed unpredictably, the usual result is a mosaic of free and occupied addresses. In which, finding a large contiguous space becomes very unlikely. Which means that the OS cleary degraded in ability after running for a while, which is unacceptable.
 
-Given there is swapping, this is demand-paging specifically
+From where we left off about owning multiple regions... It clearly does not maximize fit without further. If you say have a byte in the middle of a 3 byte frame blocking a contiguous 2 byte allocation. For as long as there is total space for something, any contiguous object could theoretically fit, either by moving allocated blocks around to make space (compaction), or dispersing the contiguous object in disjointed gaps (scattering).
 
-Reserving memory consists of allocating virtual addresses. And allocating physical memory consists of then using the reserved memory, triggering a page-fault.
+The implementation of compaction conceptually only requires some form of authoritative recordkeeping, either of what is a reference, or of whither (physical) memory a reference points. This is as the content of the memory itself is not reliably looked through for references. Having to go through verification of references for each memory call, or alternatively blocking the memory while it is being relocated, alongside the cost of relocation itself, makes it fairly slow. Perhaps for that reason, compaction was relegated to the heterodoxy in architecture (although for more advanced systems, it is still implemented in a few cases for optimization, being an implementation detail).
 
-decides how the physical memory pool is managed via a page replacement algorithm
+Scattering works off the idea that each contiguous object in runtime (usually) does not need anything represented contiguously in its view of memory except itself. Which is why each object could be given its own view of memory where no other objects are represented. Two obvious forms of this are #1 each frame having a pointer linking it to the next frame. And #2 "translation" (aka. virtual memory), objects having a "virtual" layer of representation closer to the code that maps to a layer closer to the machine, the closest being the "physical" layer. (I think these are the only two, because #1 represents an internal recordkeeping (although technically there could be more variants, but none of them are as primitive), and #2 external?)
+
+Ack, the linked frames approach is considered heterodox; Hardware supports translation and does not support linked frames. Likely, this is because chasing pointers is much slower for contiguous operations than contiguous translation, partly since the latter may be parallelized and more easily cached, due to being more predictable. Speaking of cache, the translation approach, is supported by the hardware of the Translation Lookaside Buffer (TLB), a cache of page (virtual frame) to physical frame translations.
+
+There are many ways of using translation, but all heterodox ones are flawed or something ... . In the orthodoxy, a virtual layer is not used per object, but per process, likely because the definition of an object is iffy, that processes sometimes want to reliably use the distance between two objects, and that there is some overhead to it, which often is not necessary, for say small allocations unlikely to ever be hindered by fragmentation, or processes with short lifecycles. Processes are still free to implement their own measures to scatter or linked-list their objects, nevertheless. The virtual layer is a pool (implemented as a cluster pool) mapped to physical ones (or nothing, due to swapping). Where a virtual mapping to a physical frame is implicitly owning the physical frame.
+
+Still, realistically, the overhead incurred from scattering or linked-listing objects is not always worth it, and sometimes counterproductive. So it is often not done, and becomes inevitable in practice. Note part of the motivation for why 32-bit was largely superceded by 64-bit was to increase the address space as to make encountering bad external fragmentation patterns less likely.
+
+### 5.2.3 Kernel Dynamic Space
+While the kernel is functionally a process for these intents, the orthodoxy does not treat its dynamic space the same way. It does not get its own virtual space, instead splitting the dynamic space in two, one part for the kernel only, present in every process' virtual space. The advantage is to avoid invalidating the TLB for the kernel part each time privileges switch by referencing what is already there, as opposed to having to reload it every time. With the disadvantage of reducing the amount of potential addresses for both kernel and processes, resulting in more external fragmentation. This technically is an implementation detail, but major enough to deserve mention.
+
+## 5.3 Extension into Disk
+An area of the disk could be designated to be used as more memory. This would at minimum require a translation layer mapping virtual addresses to RAM and disk addressesm, where the virtual layer's addresses is as many as those in RAM and disk combined. Since we already have a translation layer from earlier, it is easy to reuse it for this purpose too (but note these are well implementable separately). However, the main constraint is that disk operations are magnitudes slower than RAM ones, and we have to work around it, that disk-extended memory is not to be treated simply as extra RAM.
+
+Firstly, the disk memory should preferably not be used at all while you have RAM available. And secondly, how often a frame is used tends to be lopsided, so it would be better to keep rarely used frames on the disk, and vice versa. These are marking memory not in RAM as not currently available, and swapping it in from disk when it a frame is needed but not in RAM (a page fault), correspondingly swapping out another frame if there is no space. This way, once there is ample RAM available, all frames are eventually moved to RAM, provided they are used again. And depending on the algorithm for swapping out frames, the more used frames are biased to stay in RAM. Anyway, swapping is necessary, since normal hardware does not support the CPU directly reading the disk.
+
+The theoretically optimal algorithm for evicting frames evicts the frame that "is not going to be used for the longest time in the future", because it maximizes the time until a frame needs to be swapped in again. Ack, perfectly predicting the future is impossible, and the optimal algorithm has to be approximated instead. There is no best way of doing that, and we have to somewhat arbitrarily choose. First, a complication however, is that often the more accurate algorithms have more overhead, which in practice often is not worth it.
+
+The orthodoxy typically uses a "least recently used" policy for evictions, under the idea that how long ago something was used in the past says something about how likely it is to be used again in the future. Ack, a true "least recently used" policy would require a list of every page that constantly needs to be sorted based on what was used, which is a lot of overhead. Which is why simplified variants are typically preferred. A prevalent one is the second chance algorithm. Where you have a circular list of every physical frame, and each time you need to swap a page out, you advance a cursor on it. Each entry it lands on, it checks the data of the entry, which consists of a single bit. If the bit is 1, it is set to 0, and the cursor advances. If the bit is 0, the corresponding frame is swapped out, the bit set to 1, and the cursor advances. The bit is also set to 1 if the frame is accessed again by a thread, to say that it has been used.
+
+Beyond the overhead of slow disk I/O and a missing frame having to invoke an entire interrupt cycle, another weakness of swapping is thrashing. It is when most execution resources are spent on swapping rather than actually using data. This happens when the RAM is full, but there are yet many frequently used frames. There is no good way for an OS to mitigate it.
+
+Another use of memory extension into disk is that it is usable for persistent storage of memory, in case of say OS updates or session restoration. But none of that is used here.
+
+## 5.4 Page Management
+idk
+
+centralized management, that is the paging tables. that they live in the kernel is an implementation detail i guess idk
+
+because our pages hold all the metadata, we go over in detail what metadata they hold here in particular
+
+And as for implementations of virtual memory, the most relevant one is paging. Hardware also supports segmentation (for base and bound), but standard setups consist of obsoleting it like is done here. Heterodox implementations are rarely worth it due to lacking hardware support involving much more overhead, and also that there is overhead in not using paging, due to how hardware expect to have it.
+
+this is demand-paging specifically
 
 a thread can request a mapping? for use with shared memory. check if has already been mapped earlier before adding it. how does the process know when to free it though?
+
+discuss two-levelness
+
+pages are only legibile to their own process, thus conceptually owned by them
+
 
 ### 5.4.1 Two-level Entry Structures 
 Functionalities of the bits in both entries:
@@ -689,7 +738,9 @@ Functionalities of the bits in both entries:
 | 9 - 11  | AVL      | Empty.                                                                                              |
 | 12 - 31 | ptr      | Address of (PD) Page Table or (PT) Page Frame in physical memory.                                   |
 
-### 5.4.2 Page Faults 
+### 5.4.2 Page Faults
+when the frame is not in RAM
+
 exposes page_fault_handler for the interrupt
 
 ### 5.4.3 Allocating Pages
@@ -707,7 +758,7 @@ Objects may be created in different parts of memory. For use with synchronizatio
 Distinctions of: #1 kernel-level, inaccessible to user processes. #2 protected user-level, userspace stuff with write and theoretically also read access restricted, needing to go through system calls to the kernel for access. However, restricting only read access for user processes is not supported by the paging entries, and so would require additional overhead and potentially cache invalidation at some stages, which we deemed not worth having. Note this in a way could be seen as breaking the principle of a monolithic kernel. #3 unprotected user-level, which has no more pertinent kernel-level checks after being established.
 
 ## 6.2 ID System
-The system needs unique unforgable IDs. These are naturally kept track of by the kernel. Each set of IDs are a hashmap because we imagine they are sparse. Keeping track of which IDs are in use is done through a bitmap.
+The system needs unique unforgable IDs. These are naturally kept track of by the kernel. Each set of IDs are a hashmap because we imagine they are sparse. Keeping track of which IDs are in use is done through a bitmap. We do not have hashmaps yet, so all ID indexes are represented for now.
 
 In running forever, because the pool of IDs is not infinite, it has to wrap eventually. But this presents the problem of something still referring to an old ID that has been recycled. One idea to address that is a generational ID system. But in running forever, the generations have to wrap eventually too, which is unsafe, since there is no guarantee the elder generations are no longer in use. The orthodox approach instead keeps track of how many references an ID has, and only allows the ID to be reused once there are no more references to it. This is our chosen approach too.
 
@@ -1188,3 +1239,22 @@ a section on kernel background services?
 
 
 need to make sure interrupts aren't uncritically reenabled after exiting a thing that disabled interrupts?
+
+
+AMBITION: from rudimentary OS to "Minimal Monolithic Orthodox OS x86-32"? "MoorOS"
+
+multiprocessor is not a requirement because the shift to multicore happened long after x86-32 fell
+
+Big things we are missing for that dream:
+- ability to connect to the internet
+- an interface for browsing the internet. basic html rendering, ignores css and stuff
+- a desktop interface
+- disk driver supporting more stuff
+- usb driver
+- battery driver
+- being able to display a clock idk
+- sound driver
+- graphics driver supports drawing better
+- text editor
+- ability to compile and run arbitrary c code. implementing a c compiler from scratch seems too bothersome, so we'll just bundle one or something
+- ability to turn computer on and off and stuff
