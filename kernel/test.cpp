@@ -1,9 +1,20 @@
 #include <syslib.hpp>
 #include <sleep.hpp>
+#include <minstd/types.hpp>
+#include <minstd/string.hpp>
 #include "sync.hpp"
 #include "mbox.hpp"
 #include "print.hpp"
 #include <utils.hpp>
+#include "memory.hpp"
+
+Lock print_lock;
+
+void locked_print(const char* s) { // the reason why we don't always want to use it is that it can mask race conditions
+  print_lock.acquire();
+  kprintf(s);
+  print_lock.release();
+}
 
 void kthread2() {
   while (1) {
@@ -11,18 +22,77 @@ void kthread2() {
     kprintf("greetings %d\n", 5);
   }
 }
+
+void mem_test_1() {
+  char str[] = "hello hello hi from test 1\n";
+  for (int i = 0; i < 16; i++) {
+    uintptr_t addr = kmalloc(sizeof(str));
+    buffer_copy(str, (char *) addr, sizeof(str));
+    locked_print((const char *)addr);
+    kfree(addr);
+  }
+}
+
+void mem_test_2() {
+  char str1[] = "first hello hi from test 2\n";
+  char str2[] = "second hello hi from test 2\n";
+  char str3[] = "third hello hi from test 2\n";
+  for (int i = 0; i < 16; i++) {
+    uintptr_t addr1 = kmalloc(sizeof(str1));
+    uintptr_t addr2 = kmalloc(sizeof(str2));
+    uintptr_t addr3 = kmalloc(sizeof(str3));
+    buffer_copy(str1, (char *) addr1, sizeof(str1));
+    buffer_copy(str2, (char *) addr2, sizeof(str2));
+    buffer_copy(str3, (char *) addr3, sizeof(str3));
+    locked_print((const char *)addr1);
+    locked_print((const char *)addr2);
+    locked_print((const char *)addr3);
+    kfree(addr1);
+    kfree(addr2);
+    kfree(addr3);
+  }
+}
+
+void mem_test_3() {
+  uintptr_t addr1[16];
+  uintptr_t addr2[16];
+  uintptr_t addr3[16];
+
+  for (int i = 0; i < 16; i++) {
+    char str1[] = "first hello from test 3, iteration X\n";
+    char str2[] = "second hello from test 3, iteration X\n";
+    char str3[] = "third hello from test 3, iteration X\n";
+
+    str1[sizeof(str1)-3] = '0' + i;
+    str2[sizeof(str2)-3] = '0' + i;
+    str3[sizeof(str3)-3] = '0' + i;
+
+    addr1[i] = kmalloc(sizeof(str1));
+    addr2[i] = kmalloc(sizeof(str2));
+    addr3[i] = kmalloc(sizeof(str3));
+
+    buffer_copy(str1, (char *)addr1[i], sizeof(str1));
+    buffer_copy(str2, (char *)addr2[i], sizeof(str2));
+    buffer_copy(str3, (char *)addr3[i], sizeof(str3));
+  }
+
+  for (int i = 0; i < 16; i++) {
+    locked_print((const char *)addr1[i]);
+    locked_print((const char *)addr2[i]);
+    locked_print((const char *)addr3[i]);
+  }
+
+  for (int i = 0; i < 16; i++) {
+    kfree(addr1[i]);
+    kfree(addr2[i]);
+    kfree(addr3[i]);
+  }
+}
+
 void test_writes() {
   uprintf("Test 1 begin\n");
 
   while (1) { sleep(500); uprintf("Test 1 testing 111111111\n"); sleep(500); }
-}
-
-Lock print_lock;
-
-void locked_print(const char* s) {
-  print_lock.acquire();
-  kprintf(s);
-  print_lock.release();
 }
 
 void print(const char* s) {

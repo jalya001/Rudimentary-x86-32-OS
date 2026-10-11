@@ -31,3 +31,7 @@ void test_mbox_6_producer();
 void test_mbox_6_consumer();
 
 void kthread2();
+
+void mem_test_1();
+void mem_test_2();
+void mem_test_3();

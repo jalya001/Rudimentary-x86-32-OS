@@ -1,6 +1,7 @@
 #include "drivers/serial.hpp"
 #include "drivers/vga.hpp"
 #include "drivers/ata.hpp"
+//#include "drivers/keyboard.hpp"
 #include "kernel.hpp"
 #include "gdt.hpp"
 #include "entry.hpp"
@@ -12,6 +13,8 @@
 #include <sleep.hpp>
 #include <syslib.hpp>
 #include "print.hpp"
+#include "memory.hpp"
+//#include "id.hpp"
 
 extern "C" void kernel_main();
 
@@ -50,10 +53,14 @@ extern "C" void syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg
  */
 template <bool User> // using a bool is rather opaque
 tcb_t *thread_create(void (*entry_fn)()) {
+  //tcb_t *t = &thread_pool[tid - ];
+  //uint32_t tid = tid_allocator.next((uint16_t)t);
+  //if (tid == (uint32_t) - 1) return 0;
+
   uint32_t tid = tid_allocator.allocate_id();
   if (tid == (uint32_t) - 1) return 0;
-
   tcb_t *t = &thread_pool[tid - 1];
+
   *t = {};
   t->tid = tid;
   t->state = READY;
@@ -135,6 +142,7 @@ void kernel_main() {
   pic_remap();
   init_interrupts();
   init_syscalls();
+  init_memory();
   
   rc = ata_init();
   if (rc < 0) kprintf("DISK INIT ERROR\n");
@@ -164,8 +172,11 @@ void kernel_main() {
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
 
-  thread_create<false>(kthread2);
-  thread_create<true>(test_writes);
+  thread_create<false>(mem_test_1);
+  thread_create<false>(mem_test_2);
+  thread_create<false>(mem_test_3);
+  //thread_create<false>(kthread2);
+  //thread_create<true>(test_writes);
   /*
   thread_create<false>(test_mbox_1_basic_send_recv);
   thread_create<false>(test_mbox_2_blocking_recv);
