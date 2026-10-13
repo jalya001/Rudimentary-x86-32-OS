@@ -1,5 +1,7 @@
 #pragma once
 
+#include <minstd/types.hpp>
+
 extern "C" {
   void enter_critical();
   void leave_critical();
@@ -11,4 +13,9 @@ extern "C" {
   void kthread_trampoline();
   void uthread_trampoline();
   void startup_trampoline();
+}
+
+extern "C" {
+  extern uint32_t critical_depth;
+  extern uint32_t critical_saved_flags;
 }

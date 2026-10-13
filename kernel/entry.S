@@ -22,13 +22,29 @@ tim_msg:
 .extern syscall_handler
 .extern scheduler
 .extern r0_exit
+.extern critical_depth
+.extern critical_saved_flags
 
 enter_critical:
+  # If first entry (depth==0), save current EFLAGS; then cli and increment depth
+  pushf
+  popl %eax                        # eax = current EFLAGS
+  movl critical_depth, %ecx
+  testl %ecx, %ecx
+  jnz .Lec_already                 # already critical: just increment depth
+  movl %eax, critical_saved_flags  # save IF state on first entry
+.Lec_already:
   cli
+  incl critical_depth
   ret
 
 leave_critical:
-  sti
+  # Decrement depth; if it hits 0, restore EFLAGS (restores IF exactly as it was)
+  decl critical_depth
+  jnz .Llc_still_critical
+  pushl critical_saved_flags
+  popf                             # restores IF flag as it was before first enter_critical
+.Llc_still_critical:
   ret
 
 timer_handler:

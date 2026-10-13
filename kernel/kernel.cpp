@@ -14,6 +14,8 @@
 #include <syslib.hpp>
 #include "print.hpp"
 #include "memory.hpp"
+extern "C" uint32_t critical_depth = 0;
+extern "C" uint32_t critical_saved_flags = 0;
 //#include "id.hpp"
 
 extern "C" void kernel_main();
