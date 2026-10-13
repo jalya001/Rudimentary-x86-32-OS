@@ -1,12 +1,14 @@
 #include "paging.hpp"
 #include "memory.hpp"
 #include "print.hpp"
+#include "kernel.hpp"
 
 uint32_t *kernel_page_dir = nullptr;
 
 // Static page table storage - outside kpool, page-aligned
 static uint32_t __attribute__((aligned(4096))) page_dir_storage[1024];
 static uint32_t __attribute__((aligned(4096))) page_table_storage[8][1024]; // 8 page tables = 32MB mappable
+static uint32_t __attribute__((aligned(4096))) thread_page_dirs[THREAD_LIMIT][1024]; 
 static int pt_count = 0; 
 
 static uint32_t *alloc_page_table() {
@@ -17,6 +19,17 @@ static uint32_t *alloc_page_table() {
     uint32_t *pt = page_table_storage[pt_count++];
     // already zeroed (BSS)
     return pt;
+}
+
+uint32_t *alloc_page_directory() {
+    // Find a free slot - for now use a simple counter
+    // (A bitmap would be cleaner but this works for THREAD_LIMIT=12)
+    static int next_dir = 0;
+    if (next_dir >= THREAD_LIMIT) return nullptr;
+    uint32_t *dir = thread_page_dirs[next_dir++];
+    // Copy kernel mappings from kernel_page_dir
+    for (int i = 0; i < 1024; i++) dir[i] = kernel_page_dir[i];
+    return dir;
 }
 
 void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) {

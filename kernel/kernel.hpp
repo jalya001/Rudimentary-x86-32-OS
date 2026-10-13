@@ -54,6 +54,7 @@ typedef struct Thread {
   TaskState state;
   Stack kernel_stack;
   Stack user_stack;
+  uint32_t *page_directory;
   Thread *next;
   Thread *prev;
 } tcb_t;

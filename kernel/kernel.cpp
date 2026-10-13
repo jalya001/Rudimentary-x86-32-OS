@@ -68,6 +68,8 @@ tcb_t *thread_create(void (*entry_fn)()) {
   *t = {};
   t->tid = tid;
   t->state = READY;
+  t->page_directory = alloc_page_directory();
+  if (!t->page_directory) return 0;
 
   t->kernel_stack = stack_allocator.allocate();
   if (t->kernel_stack.sp == 0) return 0;  // out of stacks

@@ -47,6 +47,11 @@ uint32_t scheduler(uint32_t old_esp) {
   
   current_running->state = READY;
   tss.esp0 = current_running->kernel_stack.bottom + STACK_SIZE;
+
+  // Switch page directory if the thread has one
+  if (current_running->page_directory) {
+    asm volatile("mov %0, %%cr3" : : "r"(current_running->page_directory) : "memory");
+  }
   return current_running->kernel_stack.sp;
 }
 
