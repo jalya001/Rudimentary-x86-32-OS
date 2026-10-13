@@ -12,3 +12,6 @@ extern "C" void kprintf(const char* fmt, ...);
   } while (0)
 
 void fd_printf_internal(int fd, const char *fmt, uint32_t *args);
+
+void print_stack(uint32_t bytes);
+void print_eip();

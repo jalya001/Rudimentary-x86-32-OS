@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kernel.hpp"
+#include "structs/controlblock.hpp"
 
 void r0_yield(void);
 extern "C" void r0_exit(void);

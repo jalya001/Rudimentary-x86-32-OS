@@ -16,9 +16,16 @@ void locked_print(const char* s) { // the reason why we don't always want to use
   print_lock.release();
 }
 
-void kthread2() {
+void kthread1() {
   while (1) {
     sleep(1000);
+    kprintf("asdasd %d\n", 5);
+  }
+}
+
+void kthread2() {
+  while (1) {
+    sleep(300);
     kprintf("greetings %d\n", 5);
   }
 }
@@ -92,23 +99,11 @@ void mem_test_3() {
 void test_writes() {
   uprintf("Test 1 begin\n");
 
-  while (1) { sleep(500); uprintf("Test 1 testing 111111111\n"); sleep(500); }
+  while (1) { sleep(100); uprintf("Test 1 testing 111111111\n"); sleep(100); }
 }
 
 void print(const char* s) {
   kprintf(s);
-}
-
-void print_stack(uint32_t bytes) {
-  uint32_t* esp;
-
-  asm volatile("movl %%esp, %0" : "=r"(esp));
-
-  for (uint32_t offset = 0; offset <= bytes; offset += 4) {
-    uint32_t value = *(uint32_t*)((uint8_t*)esp + offset);
-
-    kprintf("[ESP+0x%x] = 0x%x\n", offset, value);
-  }
 }
 
 void assert(bool condition) { if (!condition) { critical_kprintf("ERROR: assertion failed\n"); } }

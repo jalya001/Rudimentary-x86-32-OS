@@ -1,5 +1,6 @@
 #include "sync.hpp"
 #include "kernel.hpp"
+#include "structs/controlblock.hpp"
 #include "entry.hpp"
 #include "scheduler.hpp"
 

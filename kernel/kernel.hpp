@@ -2,74 +2,36 @@
 
 #include <minstd/types.hpp>
 #include "entry.hpp"
+#include "structs/stack.hpp"
+#include "structs/pool.hpp"
+#include "structs/controlblock.hpp"
+#include "print.hpp"
 
 #define STACKS_START 0x20000
 #define STACK_SIZE 0x2000
 #define STACKS_END 0x60000
+#define MAX_STACKS 32
 
 #define PROCESS_LIMIT 8
 #define THREAD_LIMIT 12
 
-struct Process;
-struct Thread;
-struct AddressSpace;
-
-enum TaskState {
-  READY,
-  RUNNING,
-  BLOCKED,
-  EXITED
-};
-
-struct Stack {
-  uintptr_t bottom;
-  uintptr_t sp;
-};
-
 struct StackAllocator {
-  static constexpr uint32_t NUM_SLOTS = (STACKS_END - STACKS_START) / STACK_SIZE;
-  uint16_t used_mask = 0;   // bit i set = slot i currently in use
+  Pool<Stack> *pool;
 
-  Stack allocate() {
-    for (uint32_t i = 0; i < NUM_SLOTS; i++) {
-      if (!(used_mask & (1 << i))) {
-        used_mask |= (1 << i);
-        Stack stack;
-        stack.bottom = STACKS_START + i * STACK_SIZE;
-        stack.sp = stack.bottom + STACK_SIZE;
-        return stack;
-      }
-    }
-    return {0, 0};    // out of stacks
+  Stack *allocate() {
+    uint32_t id = this->pool->allocate();
+    if (id == (uint32_t)-1) return nullptr;
+    uintptr_t start = STACKS_START + id * STACK_SIZE;
+    this->pool->datamap[id].configure_stack(start, STACK_SIZE);
+    kprintf("NEW STACK AT: bottom: %x, sp: %x\n", this->pool->datamap[id].bottom, this->pool->datamap[id].sp);
+    return this->pool->id_to_address(id);
   }
 
-  void free(Stack stack) {
-    if (stack.bottom < STACKS_START || stack.bottom >= STACKS_END) return;  // never allocated by us
-    uint32_t i = (stack.bottom - STACKS_START) / STACK_SIZE;
-    used_mask &= ~(1 << i);
+  void free(Stack *stack) {
+    uint32_t id = this->pool->address_to_id(stack);
+    this->pool->free(id);
   }
 };
-typedef struct Thread {
-  uint32_t tid;
-  TaskState state;
-  Stack kernel_stack;
-  Stack user_stack;
-  uint32_t *page_directory;
-  Thread *next;
-  Thread *prev;
-} tcb_t;
-
-struct AddressSpace {
-  uintptr_t begin;
-  uintptr_t end;
-};
-
-typedef struct Process {
-  uint32_t pid;
-  TaskState state;
-  AddressSpace* address_space;
-  uint32_t tid; // temporarily used to index table
-} pcb_t;
 
 struct IdAllocator {
   uint32_t next;

@@ -30,6 +30,7 @@ void test_mbox_5_wraparound();
 void test_mbox_6_producer();
 void test_mbox_6_consumer();
 
+void kthread1();
 void kthread2();
 
 void mem_test_1();

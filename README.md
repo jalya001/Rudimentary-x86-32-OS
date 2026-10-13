@@ -475,6 +475,9 @@ Interrupts can be classified into three categories: #1 Hardware interrupts are g
 
 All interrupts run at kernel level, the interrupt handler changes privilege level.
 
+
+EOI is sent to say it is ready to handle another interrupt or something
+
 ### 4.4.1 IDT
 Each interrupt needs to be mapped to an IDT Entry.
 
@@ -594,16 +597,23 @@ Critical Sections, interrupt disabling
 
 ## 4.6.1 Critical Sections
 Since it is possible for interrupts to happen at any time, it can lead to race conditions on shared resources. That is why there are critical sections, which are parts of code where interrupts are disabled.
-enter_critical
-leave_critical
-leave_critical_delayed
+
+Naively disabling and then reenabling interrupts fails if you already are in a critical section (of course, you could try to be careful not to enter another critical section while in a critical section, but that requires thinking about special handling for everything, while making it idempotent has a relatively low performance cost). So instead, when a critical section is entered, the interrupt flag is saved, and then disabled. And when left, the saved flag is restored. Saving the flag into a single global kernel register is safe in multithreaded systems under the assumption a critical sections do not get interrupted (which they by definition should not). Furthermore, nested enters of critical sections only needs to heed the first enter, since entering again while already entered certainly trivially keeps interrupts disabled when leaving the nested enter.
+
+| Function | Description |
+| --- | --- |
+| `void enter_critical(void)` | On first enter, sets the interrupt flag and saves the interrupt flag into a global kernel register. Later enters only increments a counter keeping track of wrappings. |
+| `void leave_critical(void)` | On leaving the first wrapped enter, it restores the interrupt flag from that kernel register. Else it only decrements the counter. |
 
 ### 4.6.2 Synchronization Primitives
+Only that critical sections are ugly because they potentially unfairly hog the CPU while ongoing. Which is why alternate synchronization methods are usually preferred. Alas, we still briefly enter critical sections to manage these other synchronization methods safely, but it still greatly reduces the time spent in critical sections.
+
+
 Standard ones you are probably well familiar with and don't need to be explained.
 
 should these be merged with IPC somehow?
 
-how to support user-level use?
+how to support user-level use? system calls?
 
 Mutex
 lock_init(lock_t)
@@ -639,6 +649,8 @@ If the undetermined tasks themselves choose where to write in memory, it is impo
 
 Were the address space infinite, the record could simply be an incrementing pointer for each allocation, alas no. Addresses need to be reused. There are many ways of doing so, but all ways optimal, that is in (conceptually) instant allocation and deallocation when an address is needed or forgiven, are conceptually based on the primitive of a list of resources and whether each is occupied (and the ability to locate free resources to distribute and free any arbitrary resource), which we will call a pool. The canonical pool here has contiguous regions of the same value are treated as single blocks (canonically called a heap), although this is an implementation detail.
 
+In the first mb, the first 640-kb are usable, and 0xA0000-0xFFFFF are reserved for hardware.
+
 Interface:
 
 | Function | Description |
@@ -651,6 +663,16 @@ Interface:
 Notes:
 - All these functions have respective kernel-level variants.
 - Each function manages bytes (so the pools manage bytes as well). If the unit of memory they concern is bigger than a byte, the unit should be able to take multiple allocations.
+
+
+
+IMPLEMENTATION DETAILS?
+- we don't want first fit, but "neatest fit"?
+- coalescing freed areas
+- because each allocation node is far smaller than page size, protected user level is not worth it, and the implementation has to have the storage for allocation nodes (the metadata for allocations) be kernel level
+- we use one shared pool for all nodes
+- finding the nodes for a process is O(n) average. could be O(1) average with hashmaps. but we don't have them implemented yet
+
 
 ## 5.2 Allocation Management
 Under a model of isolated processes, access of allocated memory is per process, and full isolation of memory between processes, that they are unable to arbitrarily interfere with other's memory, is needed. To achieve that, units of addresses (frames) need to at least conceptually have owners (where in practice ownership is often implicit, and sometimes more like a marker of occupation). Which means allocation is in essence only the setting of ownership, along with possibly other metadata, for that frame. (Note that because you only set metadata, allocation is innately "lazy", as other work may be done later on demand.)
@@ -753,9 +775,11 @@ exposes page_fault_handler for the interrupt
 idk whether this should be a section
 
 ## 6.1 Object Residency
-Objects may be created in different parts of memory. For use with synchronization and IPC objects.
+Objects may be created in different parts of memory. E.g. for use with synchronization and IPC objects. Nevertheless has to be considered for everything.
 
-Distinctions of: #1 kernel-level, inaccessible to user processes. #2 protected user-level, userspace stuff with write and theoretically also read access restricted, needing to go through system calls to the kernel for access. However, restricting only read access for user processes is not supported by the paging entries, and so would require additional overhead and potentially cache invalidation at some stages, which we deemed not worth having. Note this in a way could be seen as breaking the principle of a monolithic kernel. #3 unprotected user-level, which has no more pertinent kernel-level checks after being established.
+Distinctions of: #1 Kernel-level, inaccessible to user processes. #2 Protected user-level, userspace stuff with write and theoretically also read access restricted, needing to go through system calls to the kernel for access. However, restricting only read access for user processes is not supported by the paging entries in typical hardware, and so would require additional overhead and potentially cache invalidation at some stages, which we deemed not worth having. Note this in a way could be seen as breaking the principle of a monolithic kernel. #3 Unprotected user-level, which has no more pertinent kernel-level checks after being established.
+
+Issue with protected user-level objects... #1 Protection is rarely neat. In orthodox paging, it consumes entire pages, potentially leading to a lot of waste. #2 Referring to them by addresses isn't useful alone. They have to go through another layer of authentication to be safely used. Because any arbitrary data might become protected or be protected and coincidentally resemble something. Perhaps these reasons are why this category of objects are rare in the orthodoxy.
 
 ## 6.2 ID System
 The system needs unique unforgable IDs. These are naturally kept track of by the kernel. Each set of IDs are a hashmap because we imagine they are sparse. Keeping track of which IDs are in use is done through a bitmap. We do not have hashmaps yet, so all ID indexes are represented for now.
@@ -1236,9 +1260,6 @@ unix documentation and wiki osdev for sources
 x86 or at least 386? implement full legacy support? fast a20 and how we set cr0 isn't full legacy
 
 a section on kernel background services?
-
-
-need to make sure interrupts aren't uncritically reenabled after exiting a thing that disabled interrupts?
 
 
 AMBITION: from rudimentary OS to "Minimal Monolithic Orthodox OS x86-32"? "MoorOS"

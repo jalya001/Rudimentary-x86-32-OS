@@ -3,6 +3,7 @@
 #include "scheduler.hpp"
 #include "entry.hpp"
 #include "print.hpp"
+#include "structs/controlblock.hpp"
 
 void r0_yield() {
   direct_scheduler_entry();
@@ -12,7 +13,7 @@ uint32_t scheduler(uint32_t old_esp) {
   static tcb_t *zombie = 0;
   tcb_t *to_remove;
   
-  current_running->kernel_stack.sp = old_esp;
+  current_running->kernel_stack->sp = old_esp;
   
   /* Reap whichever thread exited during the *previous* switch. By now
    * we're running on a different stack than it was, so its memory is
@@ -22,7 +23,7 @@ uint32_t scheduler(uint32_t old_esp) {
    */
   if (zombie) {
     stack_allocator.free(zombie->kernel_stack);
-    if (zombie->user_stack.bottom) stack_allocator.free(zombie->user_stack);
+    if (zombie->user_stack->bottom) stack_allocator.free(zombie->user_stack);
     zombie = 0;
   }
 
@@ -46,13 +47,13 @@ uint32_t scheduler(uint32_t old_esp) {
   }
   
   current_running->state = READY;
-  tss.esp0 = current_running->kernel_stack.bottom + STACK_SIZE;
+  tss.esp0 = current_running->kernel_stack->bottom + STACK_SIZE;
 
   // Switch page directory if the thread has one
   if (current_running->page_directory) {
     asm volatile("mov %0, %%cr3" : : "r"(current_running->page_directory) : "memory");
   }
-  return current_running->kernel_stack.sp;
+  return current_running->kernel_stack->sp;
 }
 
 void r0_exit() {

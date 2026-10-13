@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kernel.hpp"
+#include "structs/controlblock.hpp"
 
 enum {
   UNLOCKED,

@@ -2,6 +2,7 @@
 #include "memory.hpp"
 #include "print.hpp"
 #include "kernel.hpp"
+#include "structs/controlblock.hpp"
 
 uint32_t *kernel_page_dir = nullptr;
 

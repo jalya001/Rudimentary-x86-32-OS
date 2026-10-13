@@ -15,10 +15,12 @@
 #include "print.hpp"
 #include "memory.hpp"
 #include "paging.hpp"
+//#include "id.hpp"
+#include "structs/stack.hpp"
+#include "structs/controlblock.hpp"
 
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
-//#include "id.hpp"
 
 extern "C" void kernel_main();
 
@@ -72,14 +74,11 @@ tcb_t *thread_create(void (*entry_fn)()) {
   if (!t->page_directory) return 0;
 
   t->kernel_stack = stack_allocator.allocate();
-  if (t->kernel_stack.sp == 0) return 0;  // out of stacks
+  if (t->kernel_stack == nullptr) return 0; // out of stacks
 
   if constexpr (User) {
     t->user_stack = stack_allocator.allocate();
-    if (t-> user_stack.sp == 0) {
-      stack_allocator.free(t->kernel_stack);  // give back what er already took
-      return 0;
-    }
+    if (t->kernel_stack == nullptr) return 0;
   }
 
  /* --- thread bootstrap ---
@@ -90,11 +89,11 @@ tcb_t *thread_create(void (*entry_fn)()) {
   * points at a trampoline instead of a real saved code. Field order here
   * mirrors what scheduler_entry itself pushes/pops.
   */
-  uint8_t *top = (uint8_t *)t->kernel_stack.sp;
+  uint8_t *top = (uint8_t *)t->kernel_stack->sp;
 
   if constexpr (User) {
-    t->user_stack.sp -= sizeof(uint32_t);
-    *(uint32_t *)t->user_stack.sp = (uint32_t)call_exit;
+    t->user_stack->sp -= sizeof(uint32_t);
+    *(uint32_t *)t->user_stack->sp = (uint32_t)call_exit;
   } else {
     top -= sizeof(uint32_t);
     *(uint32_t *)top = (uint32_t)r0_exit;
@@ -102,7 +101,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   top -= sizeof(SwitchFrame);
   auto *frame = (SwitchFrame *)top;
-  t->kernel_stack.sp = (uintptr_t)frame;
+  t->kernel_stack->sp = (uintptr_t)frame;
   *frame = {};
   frame->gs = 0x10;
   frame->fs = 0x10;
@@ -112,7 +111,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   if constexpr (User) {
     frame->return_eip = (uint32_t)(uintptr_t)uthread_trampoline;
-    frame->esi = (uint32_t)t->user_stack.sp; // uthread_trampoline reads this 
+    frame->esi = (uint32_t)t->user_stack->sp; // uthread_trampoline reads this 
   } else {
     frame->return_eip = (uint32_t)(uintptr_t)kthread_trampoline;
   }
@@ -131,12 +130,8 @@ tcb_t *thread_create(void (*entry_fn)()) {
   return t;
 }
 
-void kthread1() {
-  while (1) {
-    sleep(1000);
-    serial_print("hello\n");
-    vga_write("hello\n");
-  }
+static void init_stacks() {
+  stack_allocator.pool = _create_pool<Stack>(STACKS_START, STACKS_END - STACKS_START);
 }
 
 void kernel_main() {
@@ -149,7 +144,8 @@ void kernel_main() {
   init_interrupts();
   init_syscalls();
   init_memory();
-  init_paging();
+  //init_paging();
+  init_stacks();
   
   rc = ata_init();
   if (rc < 0) kprintf("DISK INIT ERROR\n");

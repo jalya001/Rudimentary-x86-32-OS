@@ -80,3 +80,26 @@ void kprintf(const char* fmt, ...) {
   uint32_t *args = (uint32_t *)(&fmt + 1);
   fd_printf_internal(1, fmt, args);
 }
+
+
+void print_stack(uint32_t bytes) {
+  uint32_t* esp;
+
+  asm volatile("movl %%esp, %0" : "=r"(esp));
+
+  for (uint32_t offset = 0; offset <= bytes; offset += 4) {
+    uint32_t value = *(uint32_t*)((uint8_t*)esp + offset);
+
+    kprintf("[ESP+0x%x] = 0x%x\n", offset, value);
+  }
+}
+
+void print_eip() {
+  uintptr_t eip;
+  asm volatile(
+      "call 1f\n"
+      "1: pop %0\n"
+      : "=r"(eip)
+  );
+  kprintf("EIP = 0x%x\n", eip);
+}
