@@ -43,7 +43,7 @@ struct Pool {
     return &(this->datamap[id]);
   }
   uintptr_t paddress_to_id(DATA_TYPE *address) {
-    return (this->limit - (uintptr_t)address) / sizeof(DATA_TYPE);
+    return ((uintptr_t)address - (uintptr_t)this->datamap) / sizeof(DATA_TYPE);
   }
 };
 
@@ -85,7 +85,7 @@ constexpr uintptr_t ALL_MEM_CLUSTER_POOLS_BYTES = MEM_CLUSTER_POOLS_MAX * sizeof
 constexpr uintptr_t ALL_MEM_CLUSTERS_START = ALL_MEM_CLUSTER_POOLS_START + ALL_MEM_CLUSTER_POOLS_BYTES;
 constexpr uintptr_t ALL_MEM_CLUSTERS_BYTES = MEM_CLUSTERS_MAX * sizeof(Cluster);
 constexpr uintptr_t KPOOL_START = ALL_MEM_CLUSTERS_START + ALL_MEM_CLUSTERS_BYTES;
-#define KPOOL_BYTES 65536
+#define KPOOL_BYTES (256 * 1024) // 256KB for kernel pool
 
 void init_memory();
 uintptr_t kmalloc(uintptr_t size);

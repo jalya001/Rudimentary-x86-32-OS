@@ -86,32 +86,22 @@ uintptr_t ClusterPool::allocate(uintptr_t req_size) {
 }
 
 void ClusterPool::free(uintptr_t address) { // does an excruciating O(n) search by moving the cursor backwards
-  // need a case for attempting to free the final node. that should fail
-
   this->lock.acquire();
-  //kprintf("FREE START\n");
-  //debug_print_nodes();
+  Cluster *start = this->cursor;
   Cluster *test = this->cursor;
-  if (address == this->cursor->start) {
-    this->cursor = this->cursor->prev;
-    goto fin;
-  }
-  //kprintf("REQUESTED ADDRESS: %x\n", address);
-
-  while (test->start != address) {
-    //kprintf("TESTED ADDRESS: %x\n", test->start);
-    test = test->prev;
-    if (test->start == this->cursor->start) {
+  
+  do {
+    if (test->start == address) {
+      this->cursor = test->prev;
+      test->free();
       this->lock.release();
-      kprintf("ERROR: FREE NOT FOUND\n");
-      return; // not found
+      return;
     }
-  }
-fin:
-  test->free();
-  //debug_print_nodes();
-  //kprintf("FREE END\n");
+    test = test->prev;
+  } while (test != start);
+
   this->lock.release();
+  kprintf("ERROR: FREE NOT FOUND %x\n", address);
 }
 
 uintptr_t Cluster::splituse(uintptr_t new_size) {
