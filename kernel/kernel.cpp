@@ -14,6 +14,8 @@
 #include <syslib.hpp>
 #include "print.hpp"
 #include "memory.hpp"
+#include "paging.hpp"
+
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
 //#include "id.hpp"
@@ -145,6 +147,7 @@ void kernel_main() {
   init_interrupts();
   init_syscalls();
   init_memory();
+  init_paging();
   
   rc = ata_init();
   if (rc < 0) kprintf("DISK INIT ERROR\n");
