@@ -4,14 +4,19 @@
 
 uint32_t *kernel_page_dir = nullptr;
 
+// Static page table storage - outside kpool, page-aligned
+static uint32_t __attribute__((aligned(4096))) page_dir_storage[1024];
+static uint32_t __attribute__((aligned(4096))) page_table_storage[8][1024]; // 8 page tables = 32MB mappable
+static int pt_count = 0; 
+
 static uint32_t *alloc_page_table() {
-    // Allocate 2 pages so we can align within the allocation
-    uintptr_t addr = kcalloc(PAGE_SIZE * 2);
-    if (!addr) return nullptr;
-    uintptr_t aligned_addr = (addr + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
-    // kcalloc zeroed the whole region, so aligned portion is already zero
-    kprintf("alloc_page_table: got %x\n", (uint32_t)addr);
-    return (uint32_t *)aligned_addr;
+    if (pt_count >= 8) {
+        kprintf("alloc_page_table: out of static page tables\n");
+        return nullptr;
+    }
+    uint32_t *pt = page_table_storage[pt_count++];
+    // already zeroed (BSS)
+    return pt;
 }
 
 void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) {
@@ -36,8 +41,8 @@ void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) 
 }
 
 void init_paging() {
-    kprintf("init_paging: allocating page dir\n");
-    kernel_page_dir = alloc_page_table();
+    kernel_page_dir = page_dir_storage;
+    kprintf("init_paging: page dir at %x\n", (uint32_t)kernel_page_dir);
     if (!kernel_page_dir) {
         kprintf("init_paging: failed to alloc page dir\n");
         return;
