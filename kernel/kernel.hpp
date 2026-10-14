@@ -12,7 +12,7 @@
 #define STACKS_END 0x60000
 #define MAX_STACKS 32
 
-#define PROCESS_LIMIT 8
+//#define PROCESS_LIMIT 8
 #define THREAD_LIMIT 12
 
 struct StackAllocator {
@@ -33,25 +33,11 @@ struct StackAllocator {
   }
 };
 
-struct IdAllocator {
-  uint32_t next;
-  uint32_t limit;
-  
-  uint32_t allocate_id() { // Temporary approach. This is bound to run out of PIDs eventually
-    next++;
-    if (next < 1) return -1; // if it wrapped around
-    if (next > limit) return -1;
-    return next;
-  }
-};
-
 typedef int (*syscall_t) (...);
 extern syscall_t syscalls[256];
 extern tcb_t *current_running;
-extern tcb_t *zombie;   // thread that exited last cycle: its stacks are reaped on the next switch
-extern IdAllocator tid_allocator;
-extern StackAllocator stack_allocator;
-extern Thread thread_pool[THREAD_LIMIT];
+//extern tcb_t *zombie;   // thread that exited last cycle: its stacks are reaped on the next switch
+//extern Thread thread_pool[THREAD_LIMIT];
 
 struct SwitchFrame {
   uint32_t gs, fs, es, ds;
@@ -59,4 +45,6 @@ struct SwitchFrame {
   uint32_t return_eip;
 };
 
+void thread_reap(Thread *t);
+void thread_reap_delayed(uintptr_t where);
 void halt();

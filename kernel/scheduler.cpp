@@ -4,14 +4,28 @@
 #include "entry.hpp"
 #include "print.hpp"
 #include "structs/controlblock.hpp"
+#include "id.hpp"
 
 void r0_yield() {
   direct_scheduler_entry();
 }
 
+Thread *pop_ready_queue() {
+  Thread *to_remove;
+
+  if (current_running->next == current_running) halt();
+  to_remove = current_running;
+  current_running = current_running->next;
+  to_remove->prev->next = to_remove->next;
+  to_remove->next->prev = to_remove->prev;
+  to_remove->next = nullptr;
+  to_remove->prev = nullptr;
+
+  return to_remove;
+}
+
 uint32_t scheduler(uint32_t old_esp) {
-  static tcb_t *zombie = 0;
-  tcb_t *to_remove;
+  static Thread *zombie = 0;
   
   current_running->kernel_stack->sp = old_esp;
   
@@ -22,8 +36,7 @@ uint32_t scheduler(uint32_t old_esp) {
    * executing on). 
    */
   if (zombie) {
-    stack_allocator.free(zombie->kernel_stack);
-    if (zombie->user_stack->bottom) stack_allocator.free(zombie->user_stack);
+    thread_reap(zombie);
     zombie = 0;
   }
 
@@ -32,14 +45,10 @@ uint32_t scheduler(uint32_t old_esp) {
       current_running = current_running->next;
       break;
     case BLOCKED: // removes from ready queue because it's in a blocked queue now
+      pop_ready_queue();
+      break;
     case EXITED:
-      if (current_running->next == current_running) halt();
-      to_remove = current_running;
-      current_running = current_running->next;
-      to_remove->prev->next = to_remove->next;
-      to_remove->next->prev = to_remove->prev;
-      to_remove->next = nullptr;
-      to_remove->prev = nullptr;
+      zombie = pop_ready_queue();
       break;
     case RUNNING:
     default:
@@ -57,13 +66,13 @@ uint32_t scheduler(uint32_t old_esp) {
 }
 
 void r0_exit() {
-  current_running->state = EXITED;
-  direct_scheduler_entry();
+  tid_allocator->close(current_running->tid);
+  while (true) direct_scheduler_entry();
 }
 
 void r3_exit() { // For when interrupts already get disabled
-  current_running->state = EXITED;
-  scheduler_entry();
+  tid_allocator->close(current_running->tid);
+  while (true) scheduler_entry();
 }
 
 void block(tcb_t **q) {

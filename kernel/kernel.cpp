@@ -15,7 +15,7 @@
 #include "print.hpp"
 #include "memory.hpp"
 #include "paging.hpp"
-//#include "id.hpp"
+#include "id.hpp"
 #include "structs/stack.hpp"
 #include "structs/controlblock.hpp"
 
@@ -32,10 +32,6 @@ tcb_t *current_running = 0;
 syscall_t syscalls[256];
 
 StackAllocator stack_allocator;
-IdAllocator pid_allocator = { 1, PROCESS_LIMIT }; // temporarily, we are using id for indexing tables 
-IdAllocator tid_allocator = { 1, THREAD_LIMIT };
-Process processes[PROCESS_LIMIT];
-Thread thread_pool[THREAD_LIMIT];     // static pool: no heap/allocator exists yet
 
 extern "C" void fault_print(const char* name, uint32_t error) {
   kprintf("%s=%d (not necessarily an error code)\n", name, error);
@@ -57,15 +53,11 @@ extern "C" void syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg
  * NOTE: only supports up to 8 threads right now, see stack layout comment
  * in scheduler.cpp. 
  */
-template <bool User> // using a bool is rather opaque
+template<bool User> // using a bool is rather opaque
 tcb_t *thread_create(void (*entry_fn)()) {
-  //tcb_t *t = &thread_pool[tid - ];
-  //uint32_t tid = tid_allocator.next((uint16_t)t);
-  //if (tid == (uint32_t) - 1) return 0;
-
-  uint32_t tid = tid_allocator.allocate_id();
-  if (tid == (uint32_t) - 1) return 0;
-  tcb_t *t = &thread_pool[tid - 1];
+  Thread *t = (Thread *)kmalloc(sizeof(Thread));
+  uint32_t tid = tid_allocator->next((uintptr_t)t);
+  if (tid == (uint32_t)-1) return 0;
 
   *t = {};
   t->tid = tid;
@@ -79,6 +71,8 @@ tcb_t *thread_create(void (*entry_fn)()) {
   if constexpr (User) {
     t->user_stack = stack_allocator.allocate();
     if (t->kernel_stack == nullptr) return 0;
+  } else {
+    t->user_stack = 0;
   }
 
  /* --- thread bootstrap ---
@@ -110,10 +104,10 @@ tcb_t *thread_create(void (*entry_fn)()) {
   frame->ebx = (uintptr_t)entry_fn; // both trampolines read this
 
   if constexpr (User) {
-    frame->return_eip = (uint32_t)(uintptr_t)uthread_trampoline;
+    frame->return_eip = (uint32_t)uthread_trampoline;
     frame->esi = (uint32_t)t->user_stack->sp; // uthread_trampoline reads this 
   } else {
-    frame->return_eip = (uint32_t)(uintptr_t)kthread_trampoline;
+    frame->return_eip = (uint32_t)kthread_trampoline;
   }
 
   if (current_running) {
@@ -128,6 +122,17 @@ tcb_t *thread_create(void (*entry_fn)()) {
   }
 
   return t;
+}
+
+void thread_reap(Thread *t) {
+  stack_allocator.free(t->kernel_stack);
+  if (t->user_stack != 0) stack_allocator.free(t->kernel_stack);
+  kfree((uintptr_t)t);
+}
+
+void thread_reap_delayed(uintptr_t where) {
+  Thread *t = ((Thread *)where);
+  t->state = EXITED;
 }
 
 static void init_stacks() {
@@ -145,6 +150,7 @@ void kernel_main() {
   init_syscalls();
   init_memory();
   //init_paging();
+  init_ids();
   init_stacks();
   
   rc = ata_init();
