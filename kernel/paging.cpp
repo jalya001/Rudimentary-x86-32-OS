@@ -3,33 +3,40 @@
 #include "print.hpp"
 #include "kernel.hpp"
 
-uint32_t *kernel_page_dir = nullptr;
+uint32_t *kernel_page_directory = nullptr;   // matches paging.hpp
 
-// Static page table storage - outside kpool, page-aligned
 static uint32_t __attribute__((aligned(4096))) page_dir_storage[1024];
-static uint32_t __attribute__((aligned(4096))) page_table_storage[8][1024]; // 8 page tables = 32MB mappable
-static uint32_t __attribute__((aligned(4096))) thread_page_dirs[THREAD_LIMIT][1024]; 
-static int pt_count = 0; 
+static uint32_t __attribute__((aligned(4096))) page_table_storage[8][1024];
+static uint32_t __attribute__((aligned(4096))) page_dirs[THREAD_LIMIT][1024]; // one pool, bitmap-tracked
+static bool pd_used[THREAD_LIMIT] = {};
+static int pt_count = 0;
 
 static uint32_t *alloc_page_table() {
     if (pt_count >= 8) {
         kprintf("alloc_page_table: out of static page tables\n");
         return nullptr;
     }
-    uint32_t *pt = page_table_storage[pt_count++];
-    // already zeroed (BSS)
-    return pt;
+    return page_table_storage[pt_count++];
 }
 
 uint32_t *alloc_page_directory() {
-    // Find a free slot - for now use a simple counter
-    // (A bitmap would be cleaner but this works for THREAD_LIMIT=12)
-    static int next_dir = 0;
-    if (next_dir >= THREAD_LIMIT) return nullptr;
-    uint32_t *dir = thread_page_dirs[next_dir++];
-    // Copy kernel mappings from kernel_page_dir
-    for (int i = 0; i < 1024; i++) dir[i] = kernel_page_dir[i];
-    return dir;
+    for (int i = 0; i < THREAD_LIMIT; i++) {
+        if (!pd_used[i]) {
+            pd_used[i] = true;
+            uint32_t *pd = page_dirs[i];
+            for (int j = 0; j < 1024; j++) pd[j] = kernel_page_directory[j];
+            return pd;
+        }
+    }
+    kprintf("alloc_page_directory: out of page directories\n");
+    return nullptr;
+}
+
+void free_page_directory(uint32_t *pd) {
+    for (int i = 0; i < THREAD_LIMIT; i++) {
+        if (page_dirs[i] == pd) { pd_used[i] = false; return; }
+    }
+    kprintf("free_page_directory: unknown pd %x\n", (uint32_t)pd);
 }
 
 void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) {
@@ -54,25 +61,14 @@ void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) 
 }
 
 void init_paging() {
-    kernel_page_dir = page_dir_storage;
-    kprintf("init_paging: page dir at %x\n", (uint32_t)kernel_page_dir);
-    if (!kernel_page_dir) {
-        kprintf("init_paging: failed to alloc page dir\n");
-        return;
-    }
-    kprintf("init_paging: page dir at %x\n", (uint32_t)kernel_page_dir);
-
-    // Identity map first 8MB (be generous — covers kernel + pool)
-    identity_map(kernel_page_dir, 0x0, 0x800000);
-
-    kprintf("init_paging: identity map done, loading CR3\n");
-
+    kernel_page_directory = page_dir_storage;
+    identity_map(kernel_page_directory, 0x0, 0x800000);
     asm volatile (
         "mov %0, %%cr3\n\t"
         "mov %%cr0, %%eax\n\t"
         "or $0x80000000, %%eax\n\t"
         "mov %%eax, %%cr0\n\t"
-        : : "r"(kernel_page_dir) : "eax"
+        : : "r"(kernel_page_directory) : "eax"
     );
 
     kprintf("Paging enabled!\n");

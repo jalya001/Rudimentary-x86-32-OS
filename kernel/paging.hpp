@@ -16,3 +16,4 @@ extern uint32_t *kernel_page_directory;
 void init_paging();
 void identity_map(uint32_t *page_directory, uint32_t vaddr_start, uint32_t vaddr_end);
 uint32_t *alloc_page_directory();
+void free_page_directory(uint32_t *pd);
