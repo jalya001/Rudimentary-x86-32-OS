@@ -60,7 +60,7 @@ void r0_exit() {
   direct_scheduler_entry();
 }
 
-void r3_exit() { // For when interrupts already get disabled
+extern "C" void r3_exit() { // For when interrupts already get disabled
   current_running->state = EXITED;
   scheduler_entry();
 }
