@@ -17,3 +17,6 @@ void init_paging();
 void identity_map(uint32_t *page_directory, uint32_t vaddr_start, uint32_t vaddr_end);
 uint32_t *alloc_page_directory();
 void free_page_directory(uint32_t *pd);
+uint32_t frame_alloc();
+void frame_free(uint32_t paddr);
+void map_page(uint32_t *pd, uint32_t vaddr, uint32_t paddr, uint32_t flags);

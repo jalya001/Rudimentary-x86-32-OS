@@ -182,6 +182,7 @@ void kernel_main() {
   thread_create<false>(mem_test_1);
   thread_create<false>(mem_test_2);
   thread_create<false>(mem_test_3);
+  thread_create<false>(mem_test_4);
   //thread_create<false>(kthread2);
   //thread_create<true>(test_writes);
   /*

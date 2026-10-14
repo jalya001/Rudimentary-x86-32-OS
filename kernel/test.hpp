@@ -35,3 +35,4 @@ void kthread2();
 void mem_test_1();
 void mem_test_2();
 void mem_test_3();
+void mem_test_4();
