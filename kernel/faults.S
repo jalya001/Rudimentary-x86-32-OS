@@ -32,6 +32,7 @@ pf_addr_msg:
 .section .text
 
 .extern fault_print
+.extern r3_exit
 
 .globl default_interrupt_handler
 .globl divide_error_handler
@@ -276,6 +277,18 @@ page_fault_handler:
 	call fault_print
 	add $8, %esp
 
+	# Check bit 2 of error code (user vs kernel fault)
+	mov 32(%esp), %eax
+	test $0x4, %eax
+	jz 2f 			# jump to kernel_fault
+
+	# user fault, kill the thread
+	popa
+	add $4, %esp		# pop the error code the CPU pushed
+	call r3_exit
+	# r3_exit doesn't return
+
+2:		# kernel_fault
 	popa
 	cli
 1:

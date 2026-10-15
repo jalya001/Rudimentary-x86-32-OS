@@ -7,6 +7,7 @@
 #include "print.hpp"
 #include <utils.hpp>
 #include "memory.hpp"
+#include "paging.hpp"
 
 Lock print_lock;
 
@@ -525,4 +526,33 @@ void test_mbox_6_consumer() {
   mb->close();
 
   print("6 more messages than space: FINISHED\n");
+}
+
+void mem_test_4() {
+  // Allocate a frame and map it at a user virtual address
+  uint32_t *pd = alloc_page_directory();
+  if (!pd) { kprintf("mem_test_4: no page directory\n"); return; }
+
+  uint32_t paddr = frame_alloc();
+  if (!paddr) { kprintf("mem_test_4: no frame\n"); return; }
+
+  uint32_t vaddr = 0x400000; // arbitrary user virtual address
+  map_page(pd, vaddr, paddr, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+
+  // Load the page directory and write/read through the mapping 
+  asm volatile("mov %0, %%cr3" : : "r"(pd) : "memory");
+
+  volatile uint32_t *p = (volatile uint32_t *)vaddr;
+  *p = 0xDEADBEEF;
+  if (*p == 0xDEADBEEF) {
+    kprintf("mem_test_4: OK\n");
+  } else {
+    kprintf("mem_test_4: FAILED\n");
+  }
+  
+  // Restore kernel page directory
+  asm volatile("mov %0, %%cr3" : : "r"(kernel_page_directory) : "memory");
+
+  frame_free(paddr);
+  free_page_directory(pd);
 }

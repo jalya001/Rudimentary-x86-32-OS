@@ -10,7 +10,8 @@ The OS has the following features:
 | BIOS-booting                | Y | Given x86 typically uses BIOS, this is only natural. |
 | Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
 | Multitasking                | Y | Multiple threads and programs residing in memory at once. |
-| Demand-paging               | - | Memory is implemented via pages are exchanged. Exchanges use the random policy. |
+| Paging                      | Y | Two-level virtual address spaces. Per-process page directories, physical frame allocator, page fault handler. |
+| Demand-paging / Swapping    | - | Page eviction to disk is not implemented. |
 | Simplified UNIX File System | - | Including inodes. |
 | Privilege Levels            | Y | . |
 | Permissions                 | . | . |
@@ -87,40 +88,40 @@ boot/
 └── bootblock.s
 
 kernel/
-├── kernel.c/h
+├── kernel.cpp/hpp
 ├── kernel.ld
-├── entry.S/h
-├── faults.S/h
-├── interrupt.c/h
-├── scheduler.c/h
-├── pic.c/h
-├── synchronization.c/h
-├── memory.c/h
-├── paging.c/h
-├── mailbox.c/h
+├── entry.S/hpp
+├── faults.S/hpp
+├── interrupt.cpp/hpp
+├── scheduler.cpp/hpp
+├── pic.cpp/hpp
+├── synchronization.cpp/hpp
+├── memory.cpp/hpp
+├── paging.cpp/hpp
+├── mailbox.cpp/hpp
 ├── fs/
-│   ├── fs.c/h
-│   ├── block.c/h
-│   └── inode.c/h
+│   ├── fs.cpp/hpp
+│   ├── block.cpp/hpp
+│   └── inode.cpp/hpp
 ├── kdaemons/
-│   ├── loader.c/h
-│   └── clock.c/h
+│   ├── loader.cpp/hpp
+│   └── clock.cpp/hpp
 └── drivers/
-    ├── keyboard.c/h
-    ├── disk.c/h
-    ├── serial.c/h
-    └── screen.c/h
+    ├── keyboard.cpp/hpp
+    ├── disk.cpp/hpp
+    ├── serial.cpp/hpp
+    └── screen.cpp/hpp
 
 lib/
 ├── minstd/
-│   ├── string.c/h
-│   ├── types.c/h
-│   └── utils.c/h    
-├── syslib.c/h
-├── utils.c/h
-├── time.c/h
-├── sleep.c/h
-└── print.c/h
+│   ├── string.cpp/hpp
+│   ├── types.cpp/hpp
+│   └── utils.cpp/hpp
+├── syslib.cpp/hpp
+├── utils.cpp/hpp
+├── time.cpp/hpp
+├── sleep.cpp/hpp
+└── print.cpp/hpp
 
 tools/
 └── createimage.c/h
@@ -726,24 +727,20 @@ Beyond the overhead of slow disk I/O and a missing frame having to invoke an ent
 Another use of memory extension into disk is that it is usable for persistent storage of memory, in case of say OS updates or session restoration. But none of that is used here.
 
 ## 5.4 Page Management
-idk
+Paging is the implementation of virtual address spaces described in §5.2. Each process gets its own page directory (CR3), so a virtual address seen by one process is independent of the same virtual address in another.
 
-centralized management, that is the paging tables. that they live in the kernel is an implementation detail i guess idk
+Hardware implements translation using two levels. A virtual address is decomposed as:
 
-because our pages hold all the metadata, we go over in detail what metadata they hold here in particular
+```
+| 31 ---- 22 | 21 ---- 12 | 11 ---- 0 |
+| PD index   | PT index   | byte off  |
+```
 
-And as for implementations of virtual memory, the most relevant one is paging. Hardware also supports segmentation (for base and bound), but standard setups consist of obsoleting it like is done here. Heterodox implementations are rarely worth it due to lacking hardware support involving much more overhead, and also that there is overhead in not using paging, due to how hardware expect to have it.
+The CPU walks the page directory (PD) and then the page table (PT) on each memory access, caching results in the TLB. All page directories and page tables live in kernel memory, which is identity-mapped (virtual == physical), so their addresses can be used directly.
 
-this is demand-paging specifically
+The paging metadata used by hardware in both entries is detailed below.
 
-a thread can request a mapping? for use with shared memory. check if has already been mapped earlier before adding it. how does the process know when to free it though?
-
-discuss two-levelness
-
-pages are only legibile to their own process, thus conceptually owned by them
-
-
-### 5.4.1 Two-level Entry Structures 
+### 5.4.1 Two-level Entry Structures
 Functionalities of the bits in both entries:
 
 | Bit     | Code     | Description                                                                                         |
@@ -761,15 +758,46 @@ Functionalities of the bits in both entries:
 | 12 - 31 | ptr      | Address of (PD) Page Table or (PT) Page Frame in physical memory.                                   |
 
 ### 5.4.2 Page Faults
-when the frame is not in RAM
+A page fault (CPU exception 14) fires when a virtual address has no present mapping, or when access rights are violated (e.g. a user thread writing to a read-only page). The CPU pushes an error code onto the stack before calling the handler, and CR2 holds the faulting address.
 
-exposes page_fault_handler for the interrupt
+Error code bits relevant here:
+
+| Bit | Meaning when set |
+| --- | --- |
+| 0 | Protection violation (present page, wrong permissions). |
+| 1 | Access was a write. |
+| 2 | Fault occurred in user mode (CPL = 3). |
+
+The handler distinguishes two cases based on bit 2 of the error code:
+
+- **User fault** (bit 2 = 1): the faulting thread was in ring 3. The handler calls `r3_exit`, which marks that thread as exited and enters the scheduler. The rest of the system continues running.
+- **Kernel fault** (bit 2 = 0): the kernel accessed an invalid address. This is always a programming error. The handler halts the CPU with `cli; hlt` after printing the faulting address.
 
 ### 5.4.3 Allocating Pages
+Physical memory is managed by a flat bitmap frame allocator covering the region `0x800000`–`0x2000000` (24 MB, 6 144 × 4 KB frames). Frames below `0x800000` are reserved for the kernel image, page directory pool, and page table pool.
+
+```
+frame_alloc()  → scans bitmap for a free frame, marks it used, returns physical address
+frame_free(pa) → clears the corresponding bitmap bit
+```
+
+`map_page(pd, vaddr, paddr, flags)` installs a single virtual→physical mapping in a page directory. If the relevant page-directory entry is absent, it allocates a page table from a separate static pool (`MAX_USER_PT = 32` entries) and installs it with `PAGE_PRESENT | PAGE_RW | PAGE_USER`.
+
+User stacks are allocated this way at thread creation time. A single physical frame is allocated with `frame_alloc`, mapped at virtual address `0xBFFFF000` with user+writable flags, and the initial return address (`call_exit`) is written through the physical address (identity-mapped). The virtual address `0xBFFFF000 + PAGE_SIZE - 4` is used as the initial user-mode ESP.
+
+At thread exit, the scheduler's zombie-reaper checks `user_stack.bottom`. If it is `≥ 0x800000` (i.e. from the frame allocator), it calls `frame_free`; otherwise it returns the stack to the static kernel-pool allocator.
 
 ### 5.4.4 Swapping Pages
+Not implemented. All mapped frames stay in RAM for the lifetime of the thread that owns them. Page faults caused by a missing present-bit on a kernel address are treated as fatal errors (see §5.4.2).
 
 ### 5.4.5 Initialization
+`init_paging()` is called early in `kernel_main`, before any threads are created.
+
+1. Allocates the kernel page directory from the static pool (`page_dirs[THREAD_LIMIT][1024]`, bitmap-tracked).
+2. Calls `identity_map` to cover the range `0x0`–`0x800000` (the full lower 8 MB: bootblock, kernel image, and all static paging pools). Every PD entry in this range is populated, each backed by a freshly allocated page table from `page_table_storage[8][1024]`.
+3. Loads the kernel page directory into CR3 and sets CR0 bit 31 to enable paging.
+
+After this point the kernel runs with paging on. Because the identity map covers all kernel addresses, virtual and physical pointers are interchangeable within the kernel, which simplifies passing physical addresses to hardware and to the page-directory/page-table pool.
 
 # 6 Inbuilt Objects
 idk whether this should be a section

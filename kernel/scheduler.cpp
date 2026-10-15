@@ -3,8 +3,6 @@
 #include "scheduler.hpp"
 #include "entry.hpp"
 #include "print.hpp"
-#include "structs/controlblock.hpp"
-#include "id.hpp"
 
 void r0_yield() {
   direct_scheduler_entry();
@@ -36,7 +34,8 @@ uint32_t scheduler(uint32_t old_esp) {
    * executing on). 
    */
   if (zombie) {
-    thread_reap(zombie);
+    stack_allocator.free(zombie->kernel_stack);
+    if (zombie->user_stack.bottom) stack_allocator.free(zombie->user_stack);
     zombie = 0;
   }
 
@@ -71,8 +70,8 @@ void r0_exit() {
 }
 
 void r3_exit() { // For when interrupts already get disabled
-  tid_allocator->close(current_running->tid);
-  while (true) scheduler_entry();
+  current_running->state = EXITED;
+  scheduler_entry();
 }
 
 void block(tcb_t **q) {

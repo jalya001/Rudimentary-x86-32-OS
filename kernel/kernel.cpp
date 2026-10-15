@@ -70,9 +70,10 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   if constexpr (User) {
     t->user_stack = stack_allocator.allocate();
-    if (t->kernel_stack == nullptr) return 0;
-  } else {
-    t->user_stack = 0;
+    if (t-> user_stack.sp == 0) {
+      stack_allocator.free(t->kernel_stack);  // give back what er already took
+      return 0;
+    }
   }
 
  /* --- thread bootstrap ---
@@ -184,6 +185,7 @@ void kernel_main() {
   thread_create<false>(mem_test_1);
   thread_create<false>(mem_test_2);
   thread_create<false>(mem_test_3);
+  thread_create<false>(mem_test_4);
   //thread_create<false>(kthread2);
   //thread_create<true>(test_writes);
   /*
