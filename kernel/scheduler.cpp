@@ -3,6 +3,7 @@
 #include "scheduler.hpp"
 #include "entry.hpp"
 #include "print.hpp"
+#include "paging.hpp"
 
 void r0_yield() {
   direct_scheduler_entry();
@@ -22,7 +23,12 @@ uint32_t scheduler(uint32_t old_esp) {
    */
   if (zombie) {
     stack_allocator.free(zombie->kernel_stack);
-    if (zombie->user_stack.bottom) stack_allocator.free(zombie->user_stack);
+    if (zombie->user_stack.bottom) {
+      if (zombie->user_stack.bottom >= 0x800000)
+        frame_free(zombie->user_stack.bottom);
+      else 
+        stack_allocator.free(zombie->user_stack);
+    }
     zombie = 0;
   }
 

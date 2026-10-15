@@ -75,11 +75,19 @@ tcb_t *thread_create(void (*entry_fn)()) {
   if (t->kernel_stack.sp == 0) return 0;  // out of stacks
 
   if constexpr (User) {
-    t->user_stack = stack_allocator.allocate();
-    if (t-> user_stack.sp == 0) {
-      stack_allocator.free(t->kernel_stack);  // give back what er already took
-      return 0;
+    uint32_t paddr = frame_alloc();
+    if (!paddr) {
+      stack_allocator.free(t->kernel_stack);
+      return 0;  // out of memory
     }
+    uint32_t vaddr_base = 0xBFFFF000; // top of user space minus one page
+    map_page(t->page_directory, vaddr_base, paddr, PAGE_RW | PAGE_USER);
+
+    // Push call_exit via physical address (identity-mapped, writable from kernel)
+    *(uint32_t *)(paddr + PAGE_SIZE - sizeof(uint32_t)) = (uint32_t)call_exit;
+
+    t->user_stack.bottom = paddr;                  // physical - for frame_free on exit
+    t->user_stack.sp = vaddr_base + PAGE_SIZE - sizeof(uint32_t); // virtual - user ESP
   }
 
  /* --- thread bootstrap ---
