@@ -88,40 +88,40 @@ boot/
 └── bootblock.s
 
 kernel/
-├── kernel.c/h
+├── kernel.cpp/hpp
 ├── kernel.ld
-├── entry.S/h
-├── faults.S/h
-├── interrupt.c/h
-├── scheduler.c/h
-├── pic.c/h
-├── synchronization.c/h
-├── memory.c/h
-├── paging.c/h
-├── mailbox.c/h
+├── entry.S/hpp
+├── faults.S/hpp
+├── interrupt.cpp/hpp
+├── scheduler.cpp/hpp
+├── pic.cpp/hpp
+├── synchronization.cpp/hpp
+├── memory.cpp/hpp
+├── paging.cpp/hpp
+├── mailbox.cpp/hpp
 ├── fs/
-│   ├── fs.c/h
-│   ├── block.c/h
-│   └── inode.c/h
+│   ├── fs.cpp/hpp
+│   ├── block.cpp/hpp
+│   └── inode.cpp/hpp
 ├── kdaemons/
-│   ├── loader.c/h
-│   └── clock.c/h
+│   ├── loader.cpp/hpp
+│   └── clock.cpp/hpp
 └── drivers/
-    ├── keyboard.c/h
-    ├── disk.c/h
-    ├── serial.c/h
-    └── screen.c/h
+    ├── keyboard.cpp/hpp
+    ├── disk.cpp/hpp
+    ├── serial.cpp/hpp
+    └── screen.cpp/hpp
 
 lib/
 ├── minstd/
-│   ├── string.c/h
-│   ├── types.c/h
-│   └── utils.c/h    
-├── syslib.c/h
-├── utils.c/h
-├── time.c/h
-├── sleep.c/h
-└── print.c/h
+│   ├── string.cpp/hpp
+│   ├── types.cpp/hpp
+│   └── utils.cpp/hpp
+├── syslib.cpp/hpp
+├── utils.cpp/hpp
+├── time.cpp/hpp
+├── sleep.cpp/hpp
+└── print.cpp/hpp
 
 tools/
 └── createimage.c/h
