@@ -31,8 +31,6 @@ void halt() {
 tcb_t *current_running = 0;
 syscall_t syscalls[256];
 
-StackAllocator stack_allocator;
-
 extern "C" void fault_print(const char* name, uint32_t error) {
   kprintf("%s=%d (not necessarily an error code)\n", name, error);
 }
@@ -45,6 +43,14 @@ void init_syscalls() {
 
 extern "C" void syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg2, uint32_t arg3) { // could have used the trapframe instead but lazy
   syscalls[syscall_id](arg1, arg2, arg3);
+}
+
+void allocate_kstack(Stack *stk) {
+  stk->configure_stack(kmalloc(STACK_SIZE), STACK_SIZE);
+}
+
+void free_kstack(Stack *stk) {
+  kfree(stk->bottom);
 }
 
 /*
@@ -63,17 +69,34 @@ tcb_t *thread_create(void (*entry_fn)()) {
   t->tid = tid;
   t->state = READY;
   t->page_directory = alloc_page_directory();
-  if (!t->page_directory) return 0;
+  if (!t->page_directory) {
+    kprintf("ERROR: PAGE DIRECTORYn't\n");
+    return 0;
+  }
 
-  t->kernel_stack = stack_allocator.allocate();
-  if (t->kernel_stack == nullptr) return 0; // out of stacks
+  allocate_kstack(&t->kernel_stack);
+  if (t->kernel_stack.bottom == 0) {
+    kprintf("ERROR: OUT OF MEMORY\n");
+    return 0;
+  }
 
-  if constexpr (User) {
-    t->user_stack = stack_allocator.allocate();
-    if (t-> user_stack.sp == 0) {
-      stack_allocator.free(t->kernel_stack);  // give back what er already took
+  if constexpr (User) { // temporary way of setting user stack
+    uint32_t paddr = frame_alloc();
+    if (!paddr) {
+      kprintf("ERROR: OUT OF MEMORY\n");
+      free_kstack(&t->kernel_stack);
       return 0;
     }
+    uint32_t vaddr_base = 0xBFFFF000; // top of user space minus one page
+    map_page(t->page_directory, vaddr_base, paddr, PAGE_RW | PAGE_USER);
+
+    // Push call_exit via physical address (identity-mapped, writable from kernel)
+    *(uint32_t *)(paddr + PAGE_SIZE - sizeof(uint32_t)) = (uint32_t)call_exit;
+
+    t->user_stack.bottom = paddr;                  // physical - for frame_free on exit
+    t->user_stack.sp = vaddr_base + PAGE_SIZE - sizeof(uint32_t); // virtual - user ESP
+  } else {
+    t->user_stack = { 0, 0 };
   }
 
  /* --- thread bootstrap ---
@@ -84,11 +107,11 @@ tcb_t *thread_create(void (*entry_fn)()) {
   * points at a trampoline instead of a real saved code. Field order here
   * mirrors what scheduler_entry itself pushes/pops.
   */
-  uint8_t *top = (uint8_t *)t->kernel_stack->sp;
+  uint8_t *top = (uint8_t *)t->kernel_stack.sp;
 
   if constexpr (User) {
-    t->user_stack->sp -= sizeof(uint32_t);
-    *(uint32_t *)t->user_stack->sp = (uint32_t)call_exit;
+    t->user_stack.sp -= sizeof(uint32_t);
+    *(uint32_t *)t->user_stack.sp = (uint32_t)call_exit;
   } else {
     top -= sizeof(uint32_t);
     *(uint32_t *)top = (uint32_t)r0_exit;
@@ -96,7 +119,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   top -= sizeof(SwitchFrame);
   auto *frame = (SwitchFrame *)top;
-  t->kernel_stack->sp = (uintptr_t)frame;
+  t->kernel_stack.sp = (uintptr_t)frame;
   *frame = {};
   frame->gs = 0x10;
   frame->fs = 0x10;
@@ -106,7 +129,7 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   if constexpr (User) {
     frame->return_eip = (uint32_t)uthread_trampoline;
-    frame->esi = (uint32_t)t->user_stack->sp; // uthread_trampoline reads this 
+    frame->esi = (uint32_t)t->user_stack.sp; // uthread_trampoline reads this 
   } else {
     frame->return_eip = (uint32_t)kthread_trampoline;
   }
@@ -126,8 +149,8 @@ tcb_t *thread_create(void (*entry_fn)()) {
 }
 
 void thread_reap(Thread *t) {
-  stack_allocator.free(t->kernel_stack);
-  if (t->user_stack != 0) stack_allocator.free(t->kernel_stack);
+  free_kstack(&(t->kernel_stack));
+  //if (t->user_stack.bottom != 0) ring0_ufree(zombie->user_stack->bottom);
   kfree((uintptr_t)t);
 }
 
@@ -135,10 +158,11 @@ void thread_reap_delayed(uintptr_t where) {
   Thread *t = ((Thread *)where);
   t->state = EXITED;
 }
-
+/*
 static void init_stacks() {
   stack_allocator.pool = _create_pool<Stack>(STACKS_START, STACKS_END - STACKS_START);
 }
+*/
 
 void kernel_main() {
   int rc = 0;
@@ -150,9 +174,8 @@ void kernel_main() {
   init_interrupts();
   init_syscalls();
   init_memory();
-  //init_paging();
+  init_paging();
   init_ids();
-  init_stacks();
   
   rc = ata_init();
   if (rc < 0) kprintf("DISK INIT ERROR\n");
@@ -219,7 +242,7 @@ void kernel_main() {
   
   //fd_write(1, "Stress test starting - let this run for at least 1-2 minutes\n");
 
-  r0_exit();    // hand off to the first real thread
+  r0_exit_no_zombie();    // hand off to the first real thread
 
   /*
   thread_create<true>(test_exiter);

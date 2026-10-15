@@ -3,6 +3,9 @@
 #include "scheduler.hpp"
 #include "entry.hpp"
 #include "print.hpp"
+#include "paging.hpp"
+#include "structs/controlblock.hpp"
+#include "id.hpp"
 
 void r0_yield() {
   direct_scheduler_entry();
@@ -23,9 +26,9 @@ Thread *pop_ready_queue() {
 }
 
 uint32_t scheduler(uint32_t old_esp) {
-  static Thread *zombie = 0;
+  static tcb_t *zombie = 0;
   
-  current_running->kernel_stack->sp = old_esp;
+  current_running->kernel_stack.sp = old_esp;
   
   /* Reap whichever thread exited during the *previous* switch. By now
    * we're running on a different stack than it was, so its memory is
@@ -34,8 +37,7 @@ uint32_t scheduler(uint32_t old_esp) {
    * executing on). 
    */
   if (zombie) {
-    stack_allocator.free(zombie->kernel_stack);
-    if (zombie->user_stack.bottom) stack_allocator.free(zombie->user_stack);
+    thread_reap(zombie);
     zombie = 0;
   }
 
@@ -43,6 +45,7 @@ uint32_t scheduler(uint32_t old_esp) {
     case READY:
       current_running = current_running->next;
       break;
+    case EXITED_NO_ZOMBIE:
     case BLOCKED: // removes from ready queue because it's in a blocked queue now
       pop_ready_queue();
       break;
@@ -55,13 +58,14 @@ uint32_t scheduler(uint32_t old_esp) {
   }
   
   current_running->state = READY;
-  tss.esp0 = current_running->kernel_stack->bottom + STACK_SIZE;
+  tss.esp0 = current_running->kernel_stack.bottom + STACK_SIZE;
 
   // Switch page directory if the thread has one
   if (current_running->page_directory) {
     asm volatile("mov %0, %%cr3" : : "r"(current_running->page_directory) : "memory");
   }
-  return current_running->kernel_stack->sp;
+
+  return current_running->kernel_stack.sp;
 }
 
 void r0_exit() {
@@ -69,7 +73,12 @@ void r0_exit() {
   while (true) direct_scheduler_entry();
 }
 
-void r3_exit() { // For when interrupts already get disabled
+void r0_exit_no_zombie() {
+  current_running->state = EXITED_NO_ZOMBIE;
+  direct_scheduler_entry();
+}
+
+extern "C" void r3_exit() { // For when interrupts already get disabled
   current_running->state = EXITED;
   scheduler_entry();
 }

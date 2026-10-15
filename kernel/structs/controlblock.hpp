@@ -6,15 +6,15 @@ enum TaskState {
   READY,
   RUNNING,
   BLOCKED,
-  EXITED
+  EXITED,
+  EXITED_NO_ZOMBIE
 };
 
 typedef struct Thread {
   uint32_t tid;
   TaskState state;
-  Stack *kernel_stack; // to be spread across less pages, these shouldn't be pointers, actually?
-  // for that, we should have "headless pools" which only have content and bitmap, but not a stow of nodes
-  Stack *user_stack;
+  Stack kernel_stack;
+  Stack user_stack;
   uint32_t *page_directory;
   Thread *next;
   Thread *prev;

@@ -7,6 +7,7 @@
 #include "structs/controlblock.hpp"
 #include "print.hpp"
 
+// temporary stuff to be removed
 #define STACKS_START 0x20000
 #define STACK_SIZE 0x2000
 #define STACKS_END 0x60000
@@ -15,6 +16,7 @@
 //#define PROCESS_LIMIT 8
 #define THREAD_LIMIT 12
 
+/*
 struct StackAllocator {
   Pool<Stack> *pool;
 
@@ -32,12 +34,12 @@ struct StackAllocator {
     this->pool->free(id);
   }
 };
-
+*/
 typedef int (*syscall_t) (...);
 extern syscall_t syscalls[256];
 extern tcb_t *current_running;
-//extern tcb_t *zombie;   // thread that exited last cycle: its stacks are reaped on the next switch
-//extern Thread thread_pool[THREAD_LIMIT];
+//extern StackAllocator stack_allocator;
+extern Thread thread_pool[THREAD_LIMIT];
 
 struct SwitchFrame {
   uint32_t gs, fs, es, ds;
