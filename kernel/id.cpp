@@ -13,8 +13,8 @@ IDAllocator *pid_allocator;
 IDAllocator *tid_allocator;
 
 // idallocator composes an id pool
-static IDAllocator* _create_id_allocator(uint32_t limit, void (*reaping_func)(uintptr_t)) {
-  Pool<ID> *id_pool = (Pool<ID> *)kcreate_pool(limit);
+static IDAllocator* _create_id_allocator(uint32_t max_entries, void (*reaping_func)(uintptr_t)) {
+  Pool<ID> *id_pool = (Pool<ID> *)kcreate_pool<ID>(max_entries);
   IDAllocator *rt = (IDAllocator *)kmalloc(sizeof(IDAllocator));
   *rt = { id_pool, reaping_func };
   return rt;
@@ -50,6 +50,7 @@ void IDAllocator::close(uintptr_t id) {
 }
 
 void dummy_idk(uintptr_t asdqw) {
+  kprintf("I do nothing\n");
   return;
 }
 
