@@ -11,7 +11,7 @@ struct ID {
 };
 
 struct IDAllocator {
-  Pool<ID> *pool;
+  Pool<ID> *pool; // maybe making it pointer isn't good
   void (*reaping_func)(uintptr_t);
 
   uint32_t next(uintptr_t ptr);

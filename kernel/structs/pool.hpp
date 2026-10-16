@@ -49,12 +49,12 @@ struct Pool {
 
 /* This assumes you're giving it valid and proportional memory */
 template<typename DATA_TYPE = uint8_t, typename INT_TYPE = uint32_t>
-Pool<DATA_TYPE> *_create_pool(uintptr_t start, size_t size) { // pool_limit is how many DATA the pool fits
+Pool<DATA_TYPE, INT_TYPE> *_create_pool(INT_TYPE max_entries, uintptr_t start, size_t size) { // pool_limit is how many DATA the pool fits
   uint8_t *ptr = (uint8_t *)start;
-  INT_TYPE max_entries = (INT_TYPE)((8 * size) / (8 * sizeof(DATA_TYPE) + 1));
+  //INT_TYPE max_entries = (INT_TYPE)((8 * size) / (8 * sizeof(DATA_TYPE) + 1));
 
-  Pool<DATA_TYPE> *pool = (Pool<DATA_TYPE> *)ptr;
-  ptr += sizeof(Pool<DATA_TYPE>);
+  Pool<DATA_TYPE, INT_TYPE> *pool = (Pool<DATA_TYPE, INT_TYPE> *)ptr;
+  ptr += sizeof(Pool<DATA_TYPE, INT_TYPE>);
   uint8_t *bitmap = ptr;
   INT_TYPE bitmap_bytes = divide_roundup<INT_TYPE>(max_entries, 8); // is there nothing we can do to simplify?
   buffer_zero((char *)ptr, bitmap_bytes); // not part of the below loop under the assumption there is an optimized mass zeroing thing

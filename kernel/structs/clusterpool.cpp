@@ -7,17 +7,19 @@
 #include "../print.hpp"
 
 /*
-static void debug_print_nodes() {
-  Cluster *test = kpool->cursor->next;
-  kprintf("CURSOR: %x-%x\n", kpool->cursor->start, kpool->cursor->limit());
+static void debug_print_nodes(ClusterPool *pool) {
+  Cluster *test = pool->cursor->next;
+  kprintf("CURSOR: %x-%x\n", pool->cursor->start, pool->cursor->limit());
   int i = 0;
-  while (test != kpool->cursor) {
+  while (test != pool->cursor) {
     kprintf("NODE %d: %x-%x\n", i, test->start, test->limit());
     test = test->next;
     i++;
   }
 }
   */
+
+// QUESTION: should new allocations begin with +1 byte not overlap? or do they already not overlap
 
 uintptr_t ClusterPool::allocate(size_t req_size) {
   this->lock.acquire();
@@ -46,7 +48,7 @@ uintptr_t ClusterPool::allocate(size_t req_size) {
   }
   //kprintf("rt = %x\n", rt);
   this->cursor = test;
-  //debug_print_nodes();
+  //debug_print_nodes(this);
   this->lock.release();
   return rt;
 }
@@ -58,6 +60,7 @@ void ClusterPool::free(uintptr_t address) { // does an excruciating O(n) search 
   do {
     if (candidate->start == address) {
       this->cursor = candidate->prev;
+      this->bytes_used -= candidate->size;
       candidate->free();
       this->lock.release();
       return;
