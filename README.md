@@ -45,7 +45,7 @@ In terms of physical hardware, it is today only legacy machines that are capable
 - The Disk needs to have an ATA interface. Many modern disks lack it, so you probably need an emulation layer.
 - USB keyboards are not yet supported.
 - Disk space enough to fit the disk image. And it does not expand to fit additional space in its partition.
-- At least (TBD) of RAM.
+- At least 32 MiB of RAM.
 - Preferably BIOS boot firmware.
 - VGA-compatible graphics.
 - 8259 PIC.
@@ -691,7 +691,7 @@ MK-->KF[Return... return to R3]
 
 Free:
 
-```
+```mermaid
 flowchart TD
 
 QW[R3 thread ufrees an address]-->QE
