@@ -687,7 +687,6 @@ SY1-->UMI[Umalloc internal bytes from R0]
 UMI-->UP[Into the current process' dynamic memory manager]
 UP-->MK[Find a contiguous virtual space of the bytes and mark them as occupied, return an address]
 MK-->KF[Return... return to R3]
-
 ```
 
 Free:
@@ -695,12 +694,32 @@ Free:
 ```
 flowchart TD
 
-T1-->UM[R3 thread frees a umalloc]
-UM-->SY1[[System call interface, enter R0]]
-SY1-->UMI[Free internal from R0]
-UMI-->UP[Into the current process' dynamic memory manager]
-UP-->MK[Free and coalesce, and then free the frames]
-MK-->KF[Return... return to R3]
+QW[R3 thread ufrees an address]-->QE
+subgraph "System Call - R0"
+    QE[Free internal from R0]-->QS0
+    subgraph "Current Process' Dynamic Memory Manager"
+        QS0[Search through ever single registered address to locate it]
+        QS0-->QS{Is the address registered?}
+        QS-->|Yes| QD[Mark the node as free]
+        QD-->QF[Coalesce unique neighboring nodes with this one if they also are free]
+        QF-->QZ[Calculate the range which is the frame boundaries which could not previously have been freed in the now coalesced nodes and call the physical memory manager to free the pages which are now completely unoccupied]
+    end
+    QZ-->RQ0
+
+    subgraph "Physical Frame Manager"
+        RQ0[Look up which physical frame the page we want to free corresponds to in the process' page directory and look up its framestate via this physical address]
+        RQ0-->RQ{Is the frame present in RAM?}
+        RQ-->|No| RE[Grab the disk slot through the framestate and mark the slot as free, also mark the framestate slot as free]
+        RQ-->|Yes| RR[Do the equivalent of a non-dirty swap out]
+        RR-->RA{Is the frame also present in disk?}
+        RA-->|Yes| RE
+    end
+
+end
+
+RE--> aaaa
+RA-->|No| aaaa
+QS-->|No| aaaa[Resume the R3 thread]
 ```
 
 ## 5.2 Allocation Management
