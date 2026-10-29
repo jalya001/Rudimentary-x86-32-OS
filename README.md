@@ -8,7 +8,7 @@ The OS has the following features:
 | Name                        | Implemented? | Description |
 | --------------------------- | - | --- |
 | BIOS-booting                | Y | Given x86 typically uses BIOS, this is only natural. |
-| Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin for simplicity. |
+| Preemptive Scheduling       | Y | It is interrupt-driven. Context switches are done with Round Robin. |
 | Multitasking                | Y | Multiple threads and programs residing in memory at once. |
 | Paging                      | Y | Two-level virtual address spaces. Per-process page directories, physical frame allocator, page fault handler. |
 | Demand-paging / Swapping    | - | Page eviction to disk is not implemented. |
@@ -83,45 +83,62 @@ You select the USB as the device to boot from in your machine's bootloader.
 | [13 Sources](#13-sources) |
 
 ## 2.1 Folder Structure
+Legend:
+- c - C/C++ source file
+- h - C/C++ header file
+- s/S - Assembly sourcefile
+
 ```text
 boot/
 └── bootblock.s
 
 kernel/
-├── kernel.cpp/hpp
+├── structs/
+│   ├── bitmap.c/h
+│   ├── clusterpool.c/h
+│   ├── pool.c/h
+│   ├── controlblock.c/h
+│   ├── linkedlist.c/h
+│   └── stack.c/h
+├── kernel.c/h
 ├── kernel.ld
-├── entry.S/hpp
-├── faults.S/hpp
-├── interrupt.cpp/hpp
-├── scheduler.cpp/hpp
-├── pic.cpp/hpp
-├── synchronization.cpp/hpp
-├── memory.cpp/hpp
-├── paging.cpp/hpp
-├── mailbox.cpp/hpp
+├── entry.S/h
+├── faults.S/h
+├── interrupts.c/h
+├── scheduler.c/h
+├── pic.c/h
+├── sync.c/h
+├── memory.c/h
+├── paging.c/h
+├── mbox.c/h
+├── id.c/h
+├── permissions.c/h
+├── gdt.c/h
+├── shm.c/h
+├── print.c/h
 ├── fs/
-│   ├── fs.cpp/hpp
-│   ├── block.cpp/hpp
-│   └── inode.cpp/hpp
+│   ├── fs.c/h
+│   ├── block.c/h
+│   └── inode.c/h
 ├── kdaemons/
-│   ├── loader.cpp/hpp
-│   └── clock.cpp/hpp
+│   ├── loader.c/h
+│   └── clock.c/h
 └── drivers/
-    ├── keyboard.cpp/hpp
-    ├── disk.cpp/hpp
-    ├── serial.cpp/hpp
-    └── screen.cpp/hpp
+    ├── keyboard.c/h
+    ├── disk.c/h
+    ├── serial.c/h
+    └── screen.c/h
 
 lib/
 ├── minstd/
-│   ├── string.cpp/hpp
-│   ├── types.cpp/hpp
-│   └── utils.cpp/hpp
-├── syslib.cpp/hpp
-├── utils.cpp/hpp
-├── time.cpp/hpp
-├── sleep.cpp/hpp
-└── print.cpp/hpp
+│   ├── string.c/h
+│   ├── types.c/h
+│   └── utils.c/h
+├── syslib.c/h
+├── utils.c/h
+├── time.c/h
+├── sleep.c/h
+└── print.c/h
 
 tools/
 └── createimage.c/h
@@ -301,6 +318,9 @@ Interface:
 | `void process_exit(int)` | Terminates the process of the thread's environment. Uses an int to take status. |
 | `int exec(char*, char*[], char*[])` | Replaces process image with a program. Makes a stack for it too. Takes a path to replace at, arguments, and an image. Strangely, this is separate from process creation in UNIX due to an old technicality. |
 | `pid_t get_pid()` | Returns pid of current process. |
+
+
+once the final thread of a process exits, the process becomes hollow but not purged before all references are gone
 
 ## 4.2 Threads
 Threads are also allocated in a fixed size pool of blocks for simplicity.
@@ -691,6 +711,19 @@ MK-->KF[Return... return to R3]
 
 Free:
 
+
+each heap node needs to have a field on whether it is a shared memory
+if the field is not nullptr, it points to a kmalloc'd shared memory object that was created by shb_create
+the page fault handler needs to look up this object on the current process that is within the faulting address every fault via its user memory allocator
+in order to go through the PTE of every process that uses this to map to this frame that got swapped in
+this spot needs to have a pointer to the same linked list which is used for changing the PTEs in swaps
+this way, we can lazy alloc shared memory too
+
+when all parts of a page is freed, the frame is freed
+and there is no equivalent to ufree(address) on a shared memory. it is only freed once everything having it open closes it
+
+
+
 ```mermaid
 flowchart TD
 
@@ -730,7 +763,7 @@ Yore was this done by "base and bound", that each process had one frame as an ar
 However, that could theoretically lead to a worst-case of half of the memory being wasted metadata for different processes owning a bunch of single bytes. Which is why it makes sense to give each frame a decently large minimum size. That inevitably does lead to waste if say a process does not need the entire unit, but is still marked as its sole owner. Likewise, having to explicitly store the bound of each unit is also wasteful, and could be avoided by having each unit be fixed size.
 
 ### 5.2.1 Internal Fragmentation
-Yet giving a minimum size is wasteful as well, because of the potential for unused gaps within allocations (internal fragmentation). For gaps inside allocations are inevitable when the granularity of the smallest usable unit in runtime is smaller than the smallest managed on in memory, increasing in likelihood with greater disparity. And waste may only be theoretically minimal beyond the "smallest managed unit of memory". The orthodoxy compromises at 4-KiB frames.
+Yet giving a minimum size is wasteful as well, because of the potential for unused gaps within allocations (internal fragmentation). For gaps inside allocations are inevitable when the granularity of the smallest usable unit in runtime is smaller than the smallest managed on in memory, increasing in likelihood with greater disparity. And waste may only be theoretically minimal beyond the "smallest managed unit of memory". The orthodoxy compromises at 4-KiB frames, which have been cemented as the minimum for (physical) frames, since hardware only supports 20-bit physical frame addresses (where 2³² (maximum of addresses) / 2²⁰ (maximum of representation) = 2¹² (4-KiB)).
 
 With each frame having an owner, there is no reason why a frame of the same owner should not be able to have multiple allocations inside it, even if the allocation ends up split across multiple pages. So the address pool should record empty space in general, rather than only which frames are owned, such that it can fill these gaps. The worst case however, yet remains the possibility of many processes owning a mostly empty frame each. This is considered an acceptable flaw, probably owing to how spamming `malloc(FRAME_SIZE)` is intuitively going to cause problems, spamming the creation of new processes is likewise, making them hard to misuse, in a way.
 
@@ -761,6 +794,9 @@ Still, realistically, the overhead incurred from scattering or linked-listing ob
 While the kernel is functionally a process for these intents, the orthodoxy does not treat its dynamic space the same way. It does not get its own virtual space, instead splitting the dynamic space in two, one part for the kernel only, present in every process' virtual space. The advantage is to avoid invalidating the TLB for the kernel part each time privileges switch by referencing what is already there, as opposed to having to reload it every time. With the disadvantage of reducing the amount of potential addresses for both kernel and processes, resulting in more external fragmentation. This technically is an implementation detail, but major enough to deserve mention.
 
 ## 5.3 Extension into Disk
+
+32 bit computers have 4 gib of theoretical address space. the RAM was typically less than 3 gib, leaving space for swapfile
+
 An area of the disk could be designated to be used as more memory and persistent storage of memory (the latter not used here). This would at minimum require a translation layer mapping virtual addresses to RAM and disk addresses, where the virtual layer's addresses is as many as those in RAM and disk combined. Since we already have a translation layer from earlier, it is easy to reuse it for this purpose too (but note these are well implementable separately). However, the main constraint is that disk operations are magnitudes slower than RAM ones, and we have to work around it, that disk-extended memory is not to be treated simply as extra RAM.
 
 Firstly, the disk memory should preferably not be used at all while you have RAM available. And secondly, how often a frame is used tends to be lopsided, so it would be better to keep rarely used frames on the disk, and vice versa. These are marking memory not in RAM as not currently available, and swapping it in from disk when it a frame is needed but not in RAM (a page fault), correspondingly swapping out another frame if there is no space. This way, once there is ample RAM available, all frames are eventually moved to RAM, provided they are used again. And depending on the algorithm for swapping out frames, the more used frames are biased to stay in RAM. Anyway, swapping is necessary, since normal hardware does not support the CPU directly reading the disk. This does however, allow the unfavorable condition of "thrashing" to occur. It is when most execution resources are spent on swapping rather than actually using data, happening when the RAM is full, yet there are many frequently used frames. Which is evidence again the extension into disk is not simply to be treated like extra RAM.
@@ -828,7 +864,7 @@ The handler distinguishes two cases based on bit 2 of the error code:
 flowchart TD
 
 QQ-->QW[We want to write on a user memory address]
-QW-->QE[Hardware receives request and needs to make sure the corresponding physical address is accessible to it]
+QW-->QE[Hardware receives request and now needs to make sure the corresponding physical address is accessible to it...]
 QE-->QR{Is the translation in TLB cache?}
 QR-->|Yes| QA[Give the physical address to the CPU or whatever]
 QR-->|No| QS[[Hardware goes to to CR3 to walk the page directory]]
@@ -946,8 +982,8 @@ In models where two arbitrary processes are not allowed to IPC, then handles wou
 ## 6.3 Atomicity
 IPC objects have to ensure atomicity. Make use of synchronization stuff and atomic CPU operations for that
 
-## 6.4 Shared Buffer
-unprotected user-level shared buffers.
+## 6.4 User-level Shared Buffer
+Using kernel-level memory allows you to have protected shared memory structures. Which is great and all, but if you want more freedom, we have unprotected user-level shared buffers.
 
 Flow:
 - OID create_shb(virtual_address_start, pages): creates a shareable object that is unmistakeably a shared buffer object that manages all pages from the virtual address start. the creatend process gets an owner permission of the object. creation returns the OID
@@ -955,6 +991,20 @@ Flow:
 - close_shb(OID): close the shared buffer. once nothing has the shared buffer open, it is deleted. permission is not needed to close a shared buffer, but the closing is invalid if you do not have it open in the first place. because that check is necessary, the shb object needs to register which processes have it open. the shb object has no need to register which virtual addresses it is opened on
 
 notice how there is nothing like shb_destroy anywhere. this is because it would not be very useful without being unsafe. and instead it is preferable to simply stop using the shared buffer to stop the sharing.
+
+
+The dynamic memory manager does not keep records on which frames are in memory. This means it is necessary that on the creation of a shared buffer view, all records on the frames be immediately written into the opnend process' page tables. This violates laziness and may be heterodox, but we find it is so much cheaper to simply copy over some well-segmented PTEs than to later chase and manage a bunch of pointers for the same effect.
+
+On swap in and out, all the PTEs of every process sharing a frame need to be updated. Or else they are going to end up pointing to unrelated memory. This requires us to save some kind of record for each instace of a process holding the shared memory open. Note this potentially leads to a lot of overhead for a facet of the OS that is used rarely if not mitigated.
+
+Designating already allocated memory to be shared is not possible. This is because allocating shared memory allocates entire pages, whereas with normal allocations there is no guarantee the allocated memory is aligned correctly for that. If you disregard that and share anyway, two processes may end up writing to the same locations they think are free, since they would have no way of telling the memory inside a shared frame not within its allocation is already being occupied by another process.
+
+
+It is possible to share entire page tables too, but we don't have that.
+
+
+you still have to worry about synchronization like normal when using these, since there is no in-built synchronization
+
 
 ## 6.5 Mailbox
 aka. message queue
@@ -983,6 +1033,20 @@ mbox_stat
 A thing that sends to multiple mailboxes. It is very simple since it simply does that.
 
 Interface:
+
+## 6.7 Direct R/W
+A process given the permission may directly read and modify the memory of another process. This is necessary to have for functionalities like Cheat Engine.
+
+No synchronization is built in for this.
+
+Interface:
+
+| Function | Description |
+| --- | --- |
+| `size_t process_readv(PID, local_address, remote_address, size)` | Reads from another process' remote_address into local_address. Returns bytes read. | 
+| `process_writev` | . |
+
+It would be nice to have something that does not require intermediate buffers, like being able to map a range in a process to an arbitrary range in another process. Interfaces like that are not typically included in OS, and implementing one seems very difficult, so we do not have this.
 
 # 7 File System
 Arbitrary storage is an essential part of general-purpose OS, and the disk is utilized for that by writing data into it, in our case, into the Datablocks sectors. However, for that to be of any use, the data should not be written where there already is data, and it should be retrievable in a predictable manner. Or else, your data is constantly going to be overwritten, corrupted, and require scanning the entire storage space to find. In mind of that, a system is required, a file system.
