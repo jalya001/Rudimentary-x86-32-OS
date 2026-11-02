@@ -53,6 +53,10 @@ void fd_printf_internal(int fd, const char *fmt, uint32_t *args) {
       print_number(*args++, 10);
       break;
 
+    case 'u':
+      print_number(*args++, 10);
+      break;
+
     case 'x':
       print_number(*args++, 16);
       break;

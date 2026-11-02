@@ -3,9 +3,12 @@
 #include <minstd/types.hpp>
 #include "entry.hpp"
 
-#define STACKS_START 0x20000
-#define STACK_SIZE 0x2000
-#define STACKS_END 0x60000
+// Kernel stacks live at 1MB–1MB+96KB, safely above the kernel BSS
+// (which can reach ~0x56000 due to large page-table arrays in paging.cpp).
+// DO NOT use addresses below 0x100000 here.
+#define STACKS_START 0x100000
+#define STACK_SIZE   0x2000
+#define STACKS_END   0x118000
 
 #define PROCESS_LIMIT 8
 #define THREAD_LIMIT 12
@@ -98,3 +101,6 @@ struct SwitchFrame {
 };
 
 void halt();
+
+// Non-template wrapper around thread_create<true> for use in other TUs.
+tcb_t *thread_create_user(void (*entry_fn)());
