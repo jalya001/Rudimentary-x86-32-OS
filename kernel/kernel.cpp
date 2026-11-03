@@ -18,6 +18,7 @@
 #include "id.hpp"
 #include "structs/stack.hpp"
 #include "structs/controlblock.hpp"
+#include "loader.hpp"
 
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
@@ -111,7 +112,10 @@ tcb_t *thread_create(void (*entry_fn)()) {
 
   if constexpr (User) {
     t->user_stack.sp -= sizeof(uint32_t);
-    *(uint32_t *)t->user_stack.sp = (uint32_t)call_exit;
+    // Must write via physical address: 0xBFFFF000+ is only mapped in t->page_directory,
+    // not in kernel_page_directory. t->user_stack.bottom is the identity-mapped frame.
+    uint32_t phys_sp = t->user_stack.bottom + (t->user_stack.sp - (uint32_t)0xBFFFF000u);
+    *(uint32_t *)phys_sp = (uint32_t)call_exit;
   } else {
     top -= sizeof(uint32_t);
     *(uint32_t *)top = (uint32_t)r0_exit;
@@ -152,6 +156,17 @@ void thread_reap(Thread *t) {
   free_kstack(&(t->kernel_stack));
   //if (t->user_stack.bottom != 0) ring0_ufree(zombie->user_stack->bottom);
   kfree((uintptr_t)t);
+  tcb_t *thread_create_user(void (*entry_fn)()) {
+    return thread_create<true>(entry_fn);
+  }
+}
+
+void kthread1() {
+  while (1) {
+    sleep(1000);
+    serial_print("hello\n");
+    vga_write("hello\n");
+  }
 }
 
 void thread_reap_delayed(uintptr_t where) {
@@ -204,6 +219,8 @@ void kernel_main() {
   boot_thread.next = &boot_thread;
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
+
+  load_program("hello"); // now splices correctly into the ready queue
 
   thread_create<false>(mem_test_1);
   thread_create<false>(mem_test_2);

@@ -70,7 +70,7 @@ lib: $(LIB_CXX_OBJ)
 user_programs: $(USER_BINS)
 
 $(BUILD)/user/%: $(BUILD)/user/%.o $(LIB_CXX_OBJ)
-	$(LD) $(LDOPTS) -Ttext 0x0 -o $@ $^
+	$(LD) $(LDOPTS) -Ttext 0x08048000 -o $@ $^
 
 $(BUILD)/createimage.o: $(TOOLS)/createimage.cpp | $(BUILD)
 	$(HOSTCXX) -c -o $@ $<

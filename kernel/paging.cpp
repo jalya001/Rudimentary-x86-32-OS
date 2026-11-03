@@ -120,7 +120,7 @@ void identity_map(uint32_t *page_dir, uint32_t vaddr_start, uint32_t vaddr_end) 
 
 void init_paging() {
     kernel_page_directory = page_dir_storage;
-    identity_map(kernel_page_directory, 0x0, 0x800000);
+    identity_map(kernel_page_directory, 0x0, 0x2000000);
     asm volatile (
         "mov %0, %%cr3\n\t"
         "mov %%cr0, %%eax\n\t"
@@ -130,4 +130,11 @@ void init_paging() {
     );
 
     kprintf("Paging enabled!\n");
+    // Sanity-check that BSS arrays are not in the stack region (0x100000-0x118000).
+    kprintf("page_dir_storage:  0x%x\n", (uint32_t)page_dir_storage);
+    kprintf("page_table_storage:0x%x\n", (uint32_t)page_table_storage);
+    kprintf("page_dirs:         0x%x\n", (uint32_t)page_dirs);
+    kprintf("user_pt_storage:   0x%x - 0x%x\n",
+            (uint32_t)user_pt_storage,
+            (uint32_t)(user_pt_storage + MAX_USER_PT));
 }

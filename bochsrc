@@ -1,0 +1,8 @@
+megs: 32
+romimage: file=/Users/anisaifzal/.brew/Cellar/bochs/3.1/share/bochs/BIOS-bochs-latest
+vgaromimage: file=/Users/anisaifzal/.brew/Cellar/bochs/3.1/share/bochs/VGABIOS-lgpl-latest.bin
+ata0-master: type=disk, path="boot_img_test", mode=flat
+boot: disk
+log: bochs.log
+display_library: sdl2
+com1: enabled=1, mode=file, dev=serial.out
