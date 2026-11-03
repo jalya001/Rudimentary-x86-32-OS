@@ -2,155 +2,214 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
+#include <stdint.h>
+#include <assert.h>
 
-#define OUTPUT_FILE "image"
-#define SECTOR_SIZE 512 
-#define OS_SIZE_LOC 2
+#define OUTPUT_FILE      "image"
+#define SECTOR_SIZE      512
+#define OS_SIZE_LOC      2
 #define KERNEL_ENTRY_LOC 503
+#define PROG_DIR_LOC     6
+
+struct ProgramDirEntry {
+    char     name[16];
+    uint32_t lba;
+    uint32_t sectors;
+    uint32_t entry;
+    uint8_t  _pad[4];
+};
 
 typedef struct {
-  int fd;
-  off_t start_offset;
-  off_t stripped_size;
-  off_t entry;
+    int    fd;
+    off_t  start_offset;
+    off_t  stripped_size;
+    off_t  entry;
+    char   name[16];
 } FileInfo;
 
-int fill_metadata(FileInfo* info) { // Assumes it is at the start of the file
-  off_t min_offset = INT64_MAX;
-  off_t max_offset = 0;
-  bool found = false;
+int fill_metadata(FileInfo *info) {
+    off_t min_offset = (off_t)0x7fffffffffffffffLL;
+    off_t max_offset = 0;
+    bool found = false;
 
-  if (!info || info->fd < 0) return -1; // invalid file
+    if (!info || info->fd < 0) return -1;
 
-  off_t old_pos = lseek(info->fd, 0, SEEK_CUR);
-  if (old_pos == -1L) return -1;
+    off_t old_pos = lseek(info->fd, 0, SEEK_CUR);
+    if (old_pos == (off_t)-1) return -1;
 
-  Elf32_Ehdr ehdr32;
-  if (read(info->fd, &ehdr32, sizeof(Elf32_Ehdr)) != sizeof(Elf32_Ehdr)) goto fail; // invalid read or size
+    Elf32_Ehdr ehdr;
+    if (read(info->fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr)) goto fail;
+    if (ehdr.e_ident[EI_MAG0] != ELFMAG0 || ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
+        ehdr.e_ident[EI_MAG2] != ELFMAG2 || ehdr.e_ident[EI_MAG3] != ELFMAG3) {
+        printf("File is not ELF\n"); goto fail;
+    }
+    if (ehdr.e_ident[EI_CLASS] != ELFCLASS32)  { printf("File is not 32-bit\n");        goto fail; }
+    if (ehdr.e_ident[EI_DATA]  != ELFDATA2LSB) { printf("File is not little-endian\n"); goto fail; }
 
-  if (ehdr32.e_ident[EI_MAG0] != ELFMAG0 || ehdr32.e_ident[EI_MAG1] != ELFMAG1 ||
-    ehdr32.e_ident[EI_MAG2] != ELFMAG2 || ehdr32.e_ident[EI_MAG3] != ELFMAG3) {
-    printf("File is not ELF\n");
-    goto fail;
-  }
+    info->entry = ehdr.e_entry;
+    lseek(info->fd, ehdr.e_phoff, SEEK_SET);
 
-  if (ehdr32.e_ident[EI_CLASS] != ELFCLASS32) {
-    printf("File is not 32bit\n");
-    goto fail;
-  }
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        Elf32_Phdr phdr;
+        if (read(info->fd, &phdr, sizeof(phdr)) != sizeof(phdr)) goto fail;
+        if (phdr.p_type != PT_LOAD) continue;
+        found = true;
+        if ((off_t)phdr.p_offset < min_offset) min_offset = phdr.p_offset;
+        off_t end = phdr.p_offset + phdr.p_filesz;
+        if (end > max_offset) max_offset = end;
+    }
+    if (!found) goto fail;
 
-  if (ehdr32.e_ident[EI_DATA] != ELFDATA2LSB) {
-    printf("File is not little endian\n");
-    goto fail;
-  }
+    info->start_offset  = min_offset;
+    info->stripped_size = max_offset - min_offset;
 
-  info->entry = ehdr32.e_entry;
-
-  lseek(info->fd, ehdr32.e_phoff, SEEK_SET);
-
-  for (int i = 0; i < ehdr32.e_phnum; i++) {
-    Elf32_Phdr phdr;
-    if (read(info->fd, &phdr, sizeof(phdr)) != sizeof(phdr)) goto fail;
-    if (phdr.p_type != PT_LOAD) continue;
-    found = true;
-
-    if (phdr.p_offset < min_offset) min_offset = phdr.p_offset;
-    off_t end = phdr.p_offset + phdr.p_filesz;
-    if (end > max_offset) max_offset = end;
-  }
-
-  if (!found) goto fail;
-
-  info->start_offset = min_offset;
-  info->stripped_size = max_offset - min_offset;
-
-  if (info->stripped_size < info->start_offset) goto fail;
-
-  lseek(info->fd, old_pos, SEEK_SET);
-  return 1;
+    lseek(info->fd, old_pos, SEEK_SET);
+    return 0;
 
 fail:
-  lseek(info->fd, old_pos, SEEK_SET);
-  return -1;
+    lseek(info->fd, old_pos, SEEK_SET);
+    return -1;
 }
 
-off_t round_up_to_sector(off_t size) {
-  return ((size + SECTOR_SIZE - 1) / SECTOR_SIZE) * SECTOR_SIZE;
-}
+off_t round_up_sector(off_t sz) { return ((sz + SECTOR_SIZE - 1) / SECTOR_SIZE) * SECTOR_SIZE; }
+uint32_t sector_count(off_t sz)  { return (uint32_t)(round_up_sector(sz) / SECTOR_SIZE); }
 
-uint32_t count_sectors(uint32_t size) { // Assumes it has already been rounded up
-  return size / SECTOR_SIZE;
-}
-
-// Portable replacement for Linux's sendfile(): copies `size` bytes starting
-// at `offset` in `in_fd` to the current position of `out_fd`. sendfile()'s
-// signature differs between Linux and macOS/BSD, so a plain read/write loop
-// is used instead — simpler and works everywhere.
-// NOTE: this function makes more copies than sendfile and should be replaced in the future
 int copy_range(int out_fd, int in_fd, off_t offset, off_t size) {
-  if (lseek(in_fd, offset, SEEK_SET) == (off_t)-1) return -1;
-  char buf[8192];
-  off_t remaining = size;
-  while (remaining > 0) {
-    ssize_t chunk = remaining < (off_t)sizeof(buf) ? remaining : (off_t)sizeof(buf);
-    ssize_t n = read(in_fd, buf, chunk);
-    if (n <= 0) return -1;
-    ssize_t written = write(out_fd, buf, n);
-    if (written != n) return -1;
-    remaining -= n;
-  }
-  return 0;
+    if (lseek(in_fd, offset, SEEK_SET) == (off_t)-1) return -1;
+    char buf[8192];
+    off_t rem = size;
+    while (rem > 0) {
+        ssize_t chunk = rem < (off_t)sizeof(buf) ? rem : (off_t)sizeof(buf);
+        ssize_t n = read(in_fd, buf, chunk);
+        if (n <= 0) return -1;
+        if (write(out_fd, buf, n) != n) return -1;
+        rem -= n;
+    }
+    return 0;
+}
+
+int pad_to_sector(int out_fd, off_t written) {
+    off_t remainder = written % SECTOR_SIZE;
+    if (remainder == 0) return 0;
+    off_t pad = SECTOR_SIZE - remainder;
+    char zeros[SECTOR_SIZE] = {};
+    return (write(out_fd, zeros, (size_t)pad) == pad) ? 0 : -1;
+}
+
+static const char *basename_simple(const char *path) {
+    const char *s = strrchr(path, '/');
+    return s ? s + 1 : path;
 }
 
 int main(int argc, char **argv) {
-  uint32_t kernel_size = 0;
-  uint32_t kernel_entry = 0;
-  int rc;
+    // argv: createimage [--extended] bootblock kernel [user1 user2 ...]
+    int arg_start = 1;
+    if (argc > 1 && strcmp(argv[1], "--extended") == 0) arg_start = 2;
 
-  int file_count = argc - 2;
-  FileInfo* file_infos = new FileInfo[file_count];
-
-  off_t disk_size = 0;
-  for (int i = 2; i < argc; i++) {
-    file_infos[i-2].fd = open(argv[i], O_RDONLY);
-    
-    off_t file_size;
-    fill_metadata(&file_infos[i-2]);
-
-    if (i == 2) { // bootblock always first
-      file_infos[i-2].stripped_size = (off_t) SECTOR_SIZE;
-    } else if (i == 3) { // kernel is always second
-        kernel_size = (uint32_t) round_up_to_sector(file_infos[i-2].stripped_size);
-        kernel_entry = file_infos[i-2].entry;
+    if (argc - arg_start < 2) {
+        printf("Usage: createimage [--extended] bootblock kernel [userprog ...]\n");
+        return 1;
     }
-    
-    disk_size += round_up_to_sector(file_infos[i-2].stripped_size);
-  }
 
-  int image = open(OUTPUT_FILE, O_CREAT | O_WRONLY, 0644);
-  if (image == -1) { perror("open failed"); return 1; }
-  if (ftruncate(image, disk_size) == -1) { perror("ftruncate failed"); close(image); return 1; }
+    int bootblock_idx = arg_start;
+    int kernel_idx    = arg_start + 1;
+    int user_start    = arg_start + 2;
+    int user_count    = argc - user_start;
 
-  rc = lseek(image, 0, SEEK_SET); // maybe unnecessary
-    
-  for (int i = 0; i < file_count; i++) {
-    rc = copy_range(image, file_infos[i].fd, file_infos[i].start_offset, file_infos[i].stripped_size);
-    rc = close(file_infos[i].fd);
-  }
+    FileInfo bb = {}, kern = {};
+    bb.fd   = open(argv[bootblock_idx], O_RDONLY);
+    kern.fd = open(argv[kernel_idx],    O_RDONLY);
+    if (bb.fd < 0 || kern.fd < 0) { perror("open"); return 1; }
 
-  uint32_t kernel_sectors = count_sectors(kernel_size);
-  rc = lseek(image, OS_SIZE_LOC, SEEK_SET);
-  rc = write(image, &kernel_sectors, sizeof(kernel_sectors)); // Not endian safe
-  rc = lseek(image, KERNEL_ENTRY_LOC, SEEK_SET);
-  rc = write(image, &kernel_entry, sizeof(kernel_entry));
+    // bootblock is a raw binary produced by objcopy, NOT an ELF — hardcode it
+    bb.start_offset  = 0;
+    bb.stripped_size = SECTOR_SIZE;
+    bb.entry         = 0;
 
-// rc unused, needs check perhaps
-  
-  printf("OS_SIZE: %x\n", kernel_sectors);
-  printf("KERNEL_ENTRY: %x\n", kernel_entry);
+    if (fill_metadata(&kern) < 0) { printf("failed to parse kernel ELF\n"); return 1; }
 
-  close(image);
-  delete[] file_infos;
+    FileInfo *users = new FileInfo[user_count + 1]();
+    for (int i = 0; i < user_count; i++) {
+        users[i].fd = open(argv[user_start + i], O_RDONLY);
+        if (users[i].fd < 0) { perror("open user"); return 1; }
+        if (fill_metadata(&users[i]) < 0) {
+            printf("failed to parse user ELF: %s\n", argv[user_start + i]);
+            return 1;
+        }
+        const char *bn = basename_simple(argv[user_start + i]);
+        strncpy(users[i].name, bn, 15);
+        users[i].name[15] = '\0';
+    }
 
-  return 0;
+    // Disk layout:
+    //   sector 0          : bootblock (1 sector, raw binary)
+    //   sectors 1..N      : kernel    (kernel_sectors sectors)
+    //   sector N+1        : program directory (1 sector)
+    //   sector N+2..      : user programs (stripped PT_LOAD data)
+
+    uint32_t kernel_sectors = sector_count(kern.stripped_size);
+    uint32_t prog_dir_lba   = 1 + kernel_sectors;
+    uint32_t next_user_lba  = prog_dir_lba + 1;
+
+    // Build program directory sector
+    uint8_t dir_sector[SECTOR_SIZE] = {};
+    ProgramDirEntry *dir = (ProgramDirEntry *)dir_sector;
+    int max_entries = (int)(SECTOR_SIZE / sizeof(ProgramDirEntry));
+
+    for (int i = 0; i < user_count && i < max_entries; i++) {
+        uint32_t usecs = sector_count(users[i].stripped_size);
+        strncpy(dir[i].name, users[i].name, 15);
+        dir[i].name[15] = '\0';
+        dir[i].lba     = next_user_lba;
+        dir[i].sectors = usecs;
+        dir[i].entry   = (uint32_t)users[i].entry;
+        for (int p = 0; p < 4; p++) dir[i]._pad[p] = 0;
+        next_user_lba += usecs;
+        printf("USER: %-16s  lba=%-4u  sectors=%-4u  entry=0x%x\n",
+               dir[i].name, dir[i].lba, dir[i].sectors, dir[i].entry);
+    }
+
+    // Write image
+    int image = open(OUTPUT_FILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (image < 0) { perror("open image"); return 1; }
+
+    // Bootblock (1 sector, raw)
+    copy_range(image, bb.fd, 0, SECTOR_SIZE);
+
+    // Kernel
+    copy_range(image, kern.fd, kern.start_offset, kern.stripped_size);
+    pad_to_sector(image, kern.stripped_size);
+
+    // Program directory
+    write(image, dir_sector, SECTOR_SIZE);
+
+    // User programs
+    for (int i = 0; i < user_count; i++) {
+        copy_range(image, users[i].fd, users[i].start_offset, users[i].stripped_size);
+        pad_to_sector(image, users[i].stripped_size);
+    }
+
+    // Patch bootblock
+    uint32_t kernel_entry = (uint32_t)kern.entry;
+
+    lseek(image, OS_SIZE_LOC, SEEK_SET);
+    write(image, &kernel_sectors, 4);     // offset 2: kernel sector count
+
+    lseek(image, PROG_DIR_LOC, SEEK_SET);
+    write(image, &prog_dir_lba, 4);       // offset 6: program directory LBA
+
+    lseek(image, KERNEL_ENTRY_LOC, SEEK_SET);
+    write(image, &kernel_entry, 4);       // offset 503: kernel entry point
+
+    printf("OS_SIZE:      %u sectors\n", kernel_sectors);
+    printf("KERNEL_ENTRY: 0x%x\n",       kernel_entry);
+    printf("PROG_DIR_LBA: %u\n",         prog_dir_lba);
+
+    close(image);
+    for (int i = 0; i < user_count; i++) close(users[i].fd);
+    close(kern.fd);
+    close(bb.fd);
+    delete[] users;
+    return 0;
 }
