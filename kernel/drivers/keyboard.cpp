@@ -37,10 +37,12 @@ static inline uint8_t inb(uint16_t port) {
 }
 
 extern "C" void keyboard_handler_c() {
+    if (!(inb(0x64) & 0x01)) return;  // output buffer empty → nothing to read
+    
     uint8_t scancode = inb(KEYBOARD_DATA_PORT);
     if (scancode & 0x80) return; // key-up, ignore
 
-    char c = (scancode < 128) ? scancode_map[scancode] : 0;
+    char c = (scancode < 58) ? scancode_map[scancode] : 0;
     if (!c) return; // unmapped key, ignore
 
     int next = (kbd_head + 1) % KBD_BUFFER_SIZE;

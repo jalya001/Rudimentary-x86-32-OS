@@ -224,12 +224,13 @@ void kernel_main() {
   boot_thread.prev = &boot_thread;
   current_running = &boot_thread;
 
-  load_program("hello"); // now splices correctly into the ready queue
+  //load_program("hello"); // now splices correctly into the ready queue
+  load_program("shell"); 
 
-  thread_create<false>(mem_test_1);
-  thread_create<false>(mem_test_2);
-  thread_create<false>(mem_test_3);
-  thread_create<false>(mem_test_4);
+  //thread_create<false>(mem_test_1);
+  //thread_create<false>(mem_test_2);
+  //thread_create<false>(mem_test_3);
+  //thread_create<false>(mem_test_4);
   //thread_create<false>(kthread2);
   //thread_create<true>(test_writes);
   /*

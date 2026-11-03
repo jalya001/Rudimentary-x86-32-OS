@@ -33,3 +33,7 @@ void call_exit(void) {
 void call_write(int fd, const char *fmt, uint32_t *args) {
   invoke_syscall(SYS_WRITE, fd, (uint32_t)fmt, (uint32_t)args, UNUSED, UNUSED); // could go out of bounds and explode without a terminator, but eh
 }
+
+int call_getchar() {
+  return invoke_syscall(SYS_GETCHAR, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED);
+}
