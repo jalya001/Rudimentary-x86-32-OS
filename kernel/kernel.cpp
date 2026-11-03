@@ -156,9 +156,10 @@ void thread_reap(Thread *t) {
   free_kstack(&(t->kernel_stack));
   //if (t->user_stack.bottom != 0) ring0_ufree(zombie->user_stack->bottom);
   kfree((uintptr_t)t);
-  tcb_t *thread_create_user(void (*entry_fn)()) {
-    return thread_create<true>(entry_fn);
-  }
+}
+
+tcb_t *thread_create_user(void (*entry_fn)()) {
+  return thread_create<true>(entry_fn);
 }
 
 void kthread1() {
