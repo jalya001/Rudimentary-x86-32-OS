@@ -94,11 +94,6 @@ syscall_entry:
   pushl %ebx
   pushl %eax
 
-  pushl %eax
-  pushl $si_msg
-  call fault_print
-  addl $8, %esp
-
   call syscall_handler
   addl $24, %esp  # 6 × 4 bytes
 
