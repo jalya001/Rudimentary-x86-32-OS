@@ -19,6 +19,7 @@
 #include "structs/stack.hpp"
 #include "structs/controlblock.hpp"
 #include "loader.hpp"
+#include "drivers/keyboard.hpp"
 
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
@@ -39,6 +40,7 @@ extern "C" void fault_print(const char* name, uint32_t error) {
 void init_syscalls() {
   syscalls[SYS_YIELD] = (syscall_t)scheduler_entry;
   syscalls[SYS_EXIT] = (syscall_t)r3_exit;
+  syscalls[SYS_GETCHAR] = (syscall_t)kbd_getchar;
   syscalls[SYS_WRITE] = (syscall_t)fd_printf_internal;
 }
 
@@ -161,7 +163,7 @@ void thread_reap(Thread *t) {
 tcb_t *thread_create_user(void (*entry_fn)()) {
   return thread_create<true>(entry_fn);
 }
-
+/*
 void kthread1() {
   while (1) {
     sleep(1000);
@@ -169,6 +171,7 @@ void kthread1() {
     vga_write("hello\n");
   }
 }
+*/
 
 void thread_reap_delayed(uintptr_t where) {
   Thread *t = ((Thread *)where);

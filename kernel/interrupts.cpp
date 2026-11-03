@@ -39,6 +39,7 @@ void init_interrupts() {
   idt_set_gate(0x13, (uint32_t)simd_fpu_handler,             KERNEL_CS, INTERRUPT_GATE);
 
   idt_set_gate(32, (uint32_t)timer_handler, KERNEL_CS, INTERRUPT_GATE);
+  idt_set_gate(33, (uint32_t)keyboard_handler, KERNEL_CS, INTERRUPT_GATE);
   idt_set_gate(0x80, (uint32_t)syscall_entry, KERNEL_CS, 0xEE);
 
   idtp.limit = sizeof(idt) - 1;

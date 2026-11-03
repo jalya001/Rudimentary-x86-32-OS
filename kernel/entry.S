@@ -16,6 +16,7 @@ tim_msg:
 .globl direct_scheduler_entry
 .globl syscall_entry
 .globl timer_handler
+.globl keyboard_handler
 .globl kthread_trampoline
 .globl uthread_trampoline
 
@@ -60,6 +61,12 @@ timer_handler:
 
   call scheduler_entry
 
+  popa
+  iret
+
+keyboard_handler:
+  pusha
+  call keyboard_handler_c
   popa
   iret
 

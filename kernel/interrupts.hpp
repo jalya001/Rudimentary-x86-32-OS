@@ -16,3 +16,4 @@ struct IDTPTR {
 } __attribute__((packed));
 
 void init_interrupts();
+extern "C" void keyboard_handler();
