@@ -30,10 +30,14 @@ void call_exit(void) {
   invoke_syscall(SYS_EXIT, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED);
 }
 
-void call_write(int fd, const char *fmt, uint32_t *args) {
-  invoke_syscall(SYS_WRITE, fd, (uint32_t)fmt, (uint32_t)args, UNUSED, UNUSED); // could go out of bounds and explode without a terminator, but eh
+void call_exec(const char *name) {
+  invoke_syscall(SYS_EXEC, (uint32_t)name, UNUSED, UNUSED, UNUSED, UNUSED);
 }
 
 int call_getchar() {
   return invoke_syscall(SYS_GETCHAR, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED);
+}
+
+void call_write(int fd, const char *fmt, uint32_t *args) {
+  invoke_syscall(SYS_WRITE, fd, (uint32_t)fmt, (uint32_t)args, UNUSED, UNUSED); // could go out of bounds and explode without a terminator, but eh
 }

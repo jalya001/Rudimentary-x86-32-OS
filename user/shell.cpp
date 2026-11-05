@@ -43,7 +43,7 @@ extern "C" void _start() {
 
         if (c == '\n') {
             line[len] = '\0';
-            // TODO: execute command in line
+            if (len > 0) call_exec(line);
             len = 0;
             shell_write("> ");
             continue;

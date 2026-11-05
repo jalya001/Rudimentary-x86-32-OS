@@ -37,9 +37,11 @@ static inline uint8_t inb(uint16_t port) {
 }
 
 extern "C" void keyboard_handler_c() {
-    if (!(inb(0x64) & 0x01)) return;  // output buffer empty → nothing to read
-    
     uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+
+    // Send EOI to PIC (Programmable Interrupt Controller) unconditionally, before any early returns
+    asm volatile("outb %0, %1" :: "a"((uint8_t)0x20), "Nd"((uint16_t)0x20));
+
     if (scancode & 0x80) return; // key-up, ignore
 
     char c = (scancode < 58) ? scancode_map[scancode] : 0;
@@ -50,9 +52,6 @@ extern "C" void keyboard_handler_c() {
         kbd_buffer[kbd_head] = c;
         kbd_head = next;
     }
-
-    // Send EOI to PIC (Programmable Interrupt Controller)
-    asm volatile("outb %0, %1" :: "a"((uint8_t)0x20), "Nd"((uint16_t)0x20));
 }
 
 // Returns -1 if buffer is empty, otherwise returns the character

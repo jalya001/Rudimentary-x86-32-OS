@@ -28,6 +28,16 @@ static uint32_t read_prog_dir_lba() {
 }
 
 int load_program(const char *name) {
+    // Copy name to kernel buffer - caller may be in user space
+    char kname[16];
+    int i = 0;
+    while (i < 15 && name[i]) { 
+        kname[i] = name[i];
+        i++;
+    }
+    kname[i] = '\0';
+    name = kname; // use kernel buffer from here on
+    
     // 1. Read the program directory sector
     uint32_t dir_lba = read_prog_dir_lba();
     if (dir_lba == 0) {

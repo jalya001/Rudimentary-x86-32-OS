@@ -104,6 +104,8 @@ syscall_entry:
   call syscall_handler
   addl $24, %esp  # 6 × 4 bytes
 
+  movl %eax, 28(%esp) # return value goes into the saved eax slot of the trapframe
+
   popal
   iret
 

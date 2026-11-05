@@ -30,6 +30,6 @@ void pic_remap() {
   outb(PIC1_DATA, ICW4_8086);
   outb(PIC2_DATA, ICW4_8086);
 
-  outb(PIC1_DATA, master_mask);
+  outb(PIC1_DATA, master_mask & ~0x02); // unmask IRQ1 (keyboard)
   outb(PIC2_DATA, slave_mask);
 }

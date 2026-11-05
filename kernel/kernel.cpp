@@ -1,7 +1,7 @@
 #include "drivers/serial.hpp"
 #include "drivers/vga.hpp"
 #include "drivers/ata.hpp"
-//#include "drivers/keyboard.hpp"
+#include "drivers/keyboard.hpp"
 #include "kernel.hpp"
 #include "gdt.hpp"
 #include "entry.hpp"
@@ -19,7 +19,6 @@
 #include "structs/stack.hpp"
 #include "structs/controlblock.hpp"
 #include "loader.hpp"
-#include "drivers/keyboard.hpp"
 
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
@@ -40,12 +39,13 @@ extern "C" void fault_print(const char* name, uint32_t error) {
 void init_syscalls() {
   syscalls[SYS_YIELD] = (syscall_t)scheduler_entry;
   syscalls[SYS_EXIT] = (syscall_t)r3_exit;
+  syscalls[SYS_EXEC] = (syscall_t)load_program;
   syscalls[SYS_GETCHAR] = (syscall_t)kbd_getchar;
   syscalls[SYS_WRITE] = (syscall_t)fd_printf_internal;
 }
 
-extern "C" void syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg2, uint32_t arg3) { // could have used the trapframe instead but lazy
-  syscalls[syscall_id](arg1, arg2, arg3);
+extern "C" uint32_t syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg2, uint32_t arg3) { // could have used the trapframe instead but lazy
+  return syscalls[syscall_id](arg1, arg2, arg3);
 }
 
 void allocate_kstack(Stack *stk) {
@@ -226,6 +226,7 @@ void kernel_main() {
 
   //load_program("hello"); // now splices correctly into the ready queue
   load_program("shell"); 
+  asm volatile("sti");
 
   //thread_create<false>(mem_test_1);
   //thread_create<false>(mem_test_2);

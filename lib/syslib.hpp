@@ -19,6 +19,7 @@ void call_write(int fd, const char *fmt, uint32_t *args);
 int readdir(unsigned char *buf);
 void loadproc(int location, int size);
 int call_getchar(); // returns char or -1 if buffer empty
+void call_exec(const char *name);
 
 int fs_open(const char *filename, int mode);
 int fs_close(int fd);
