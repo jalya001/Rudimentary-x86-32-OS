@@ -21,11 +21,10 @@ void loadproc(int location, int size);
 int call_getchar(); // returns char or -1 if buffer empty
 void call_exec(const char *name);
 
-int fs_open(const char *filename, int mode);
-int fs_close(int fd);
-int fs_read(int fd, char *buffer, int size);
-int fs_write(int fd, char *buffer, int size);
-int fs_lseek(int fd, int offset, int whence);
-int fs_link(char *linkname, char *filename);
-int fs_unlink(char *linkname);
-int fs_stat(int fd, char *buffer);
+int call_fs_open(const char *filename, int mode);
+int call_fs_close(int fd);
+int call_fs_read(int fd, char *buffer, int size);
+int call_fs_write(int fd, char *buffer, int size);
+int call_fs_lseek(int fd, int offset, int whence);
+int call_fs_unlink(const char *linkname);
+int call_fs_stat(int fd, char *buffer);

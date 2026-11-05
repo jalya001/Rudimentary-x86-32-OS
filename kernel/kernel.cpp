@@ -19,6 +19,7 @@
 #include "structs/stack.hpp"
 #include "structs/controlblock.hpp"
 #include "loader.hpp"
+#include "fs.hpp"
 
 extern "C" uint32_t critical_depth = 0;
 extern "C" uint32_t critical_saved_flags = 0;
@@ -42,6 +43,13 @@ void init_syscalls() {
   syscalls[SYS_EXEC] = (syscall_t)load_program;
   syscalls[SYS_GETCHAR] = (syscall_t)kbd_getchar;
   syscalls[SYS_WRITE] = (syscall_t)fd_printf_internal;
+  syscalls[SYS_FS_OPEN]   = (syscall_t)fs_open;
+  syscalls[SYS_FS_CLOSE]  = (syscall_t)fs_close;
+  syscalls[SYS_FS_READ]   = (syscall_t)fs_read;
+  syscalls[SYS_FS_WRITE]  = (syscall_t)fs_write;
+  syscalls[SYS_FS_LSEEK]  = (syscall_t)fs_lseek;
+  syscalls[SYS_FS_UNLINK] = (syscall_t)fs_unlink;
+  syscalls[SYS_FS_STAT]   = (syscall_t)fs_stat;
 }
 
 extern "C" uint32_t syscall_handler(uint32_t syscall_id, uint32_t arg1, uint32_t arg2, uint32_t arg3) { // could have used the trapframe instead but lazy
@@ -198,6 +206,9 @@ void kernel_main() {
   
   rc = ata_init();
   if (rc < 0) kprintf("DISK INIT ERROR\n");
+
+  rc = fs_init();
+  if (rc < 0) kprintf("FS INIT ERROR\n");
 
   serial_print("Hello World.\n");
   vga_write("Hello World\n");
